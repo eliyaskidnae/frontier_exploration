@@ -12,6 +12,7 @@ from geometry_msgs.msg import Point
 from std_msgs.msg import ColorRGBA 
 from nav_msgs.msg import OccupancyGrid
 from geometry_msgs.msg import PoseStamped
+from std_msgs.msg import Bool
 from std_msgs.msg import Float64MultiArray
 from utils_lib.online_planning import StateValidityChecker, move_to_point, compute_path , wrap_angle
 class OnlinePlanner:
@@ -44,8 +45,6 @@ class OnlinePlanner:
         # Maximum angular velocity control action               
         self.w_max = 0.3                
         self.retry = 0 # Retry counter for planning failures
-        self.planning = True
-        self.path_not_found = True
         # PUBLISHERS
         # Publisher for sending velocity commands to the robot
         # self.cmd_pub = None # TODO: publisher to cmd_vel_topic
@@ -53,6 +52,7 @@ class OnlinePlanner:
         # Publisher for visualizing the path to with rviz
         self.marker_pub = rospy.Publisher('~path_marker', Marker, queue_size=1)
         self.tree_pub = rospy.Publisher('~tree_marker', Marker, queue_size=1)
+        self.goal_reach = rospy.Publisher('/goal_reached', Bool, queue_size=1)
         # SUBSCRIBERS
         self.gridmap = rospy.Subscriber(gridmap_topic, OccupancyGrid, self.get_gridmap)
         # self.odom_sub = None # TODO: subscriber to odom_topic  
@@ -89,18 +89,33 @@ class OnlinePlanner:
             print("goal point ",self.goal)
             if(not self.svc.is_valid(self.goal)):
                 rospy.logwarn("Goal Point is not valid , please try again")
+                msg = Bool()
+                msg = True
+                self.goal_reach.publish(msg)
             elif(not self.svc.is_valid(self.current_pose[0:2])):      
                 rospy.logwarn("Start Point is not valid , please try again")
                 self.recovery_behavior() # move around to find a valid point
             else :
                 print("Valid Goal Point !")
-                self.planning = True
+                msg = Bool()
+                msg = False
+                self.goal_reach.publish(msg)
             # Plan a new path to self.goal
                 self.plan()
 
         
     # Map callback: Gets the latest occupancy map published by Octomap server and update 
     # the state validity checker
+
+    def rotate_to_explore(self):
+        start_time = rospy.Time.now()
+        duration = 8
+        while(rospy.Time.now() - start_time).to_sec() < duration:
+            # print("publish")
+            self.__send_commnd__(0, self.w_max)  
+        self.__send_commnd__(0, 0)
+
+
     def recovery_behavior(self):
         pose = self.svc.not_valid_pose(self.current_pose[0:2])
         pose = self.svc.__map_to_position__(pose)
@@ -139,6 +154,11 @@ class OnlinePlanner:
             # check if the goal and robot current pose is valid
             if(self.goal is not None and not self.svc.is_valid(self.goal)):
                 rospy.logwarn("Goal Point is not valid , please try again")
+                # publish goal reach for new exploration 
+                msg = Bool()
+                msg = True 
+                self.goal_reach.publish(msg)
+
             if(self.goal is not None and not self.svc.is_valid(self.current_pose[0:2])):
              rospy.logwarn("Start Point is not valid , please move around ")
              self.recovery_behavior() # move around to find a valid point
@@ -170,9 +190,12 @@ class OnlinePlanner:
     def plan(self):
         # Invalidate previous plan if available
         self.path = []
+        print("Plan_goal"  , self.goal)
         if(not self.svc.is_valid(self.goal)):
             rospy.logwarn("Goal is not valid, Target place is not safe")
-            self.planning = False
+            msg = Bool()
+            msg = True
+            self.goal_reach.publish(msg)
 
         # print("Compute new path") 
         # TODO: plan a path from self.current_pose to self.goal
@@ -188,13 +211,13 @@ class OnlinePlanner:
                               
             else:
                 rospy.loginfo("Path Found !")
+                print("Path Found !" , self.path)
                 self.path_not_found = True
                 self.retry = 0 # reset retry counter
                 # Publish plan marker to visualize in rviz
-               
                 self.publish_path()
-           
                 # remove initial waypoint in the path (current pose is already reached)
+                print("current pose" , self.path[0])
                 if self.path[0]:
                     del self.path[0]                   
             
@@ -214,10 +237,14 @@ class OnlinePlanner:
                 
                 if(len(self.path) == 0 ):
                     rospy.loginfo("Goal Point Reached !")
-                    self.planning= False
-                    self.path_not_found = False
+                 
+                    # self.rotate_to_explore()
                     self.goal = None
+                    msg = Bool()
+                    msg = True
+                    self.goal_reach.publish(msg)
                     self.retry = 0
+                   
                 
             else: # TODO: Compute velocities using controller function in utils_lib
               
@@ -237,9 +264,7 @@ class OnlinePlanner:
         self.cmd.angular.y = 0
         self.cmd.angular.z = np.clip(w, -self.w_max, self.w_max)
         self.cmd_pub.publish(self.cmd)
-
     # Publish a path as a series of line markers
-        
     def draw_tree(self):
         if(len(self.edges) > 0):
             m = Marker()
@@ -275,7 +300,6 @@ class OnlinePlanner:
                     m.points.append(p)
                     m.colors.append(color_black)
             self.tree_pub.publish(m)
-
     def publish_path(self):
         if len(self.path) > 1:
             print("Publish path!")

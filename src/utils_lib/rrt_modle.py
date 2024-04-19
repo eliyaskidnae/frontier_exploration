@@ -50,7 +50,8 @@ class RRT:
         self.k        = k
         self.q        = q
         self.p        = p 
-        self.dominion = dominion
+        # self.dominion = dominion
+        self.dominion = [-7,7,-7,7]
         self.max      = max_time 
         self.vertices =      [ ]
         self.edges    =      [ ]
@@ -60,7 +61,7 @@ class RRT:
         self.path          = [ ]
         self.smoothed_path = [ ]
         self.is_RRT_star = True # by deafault it is False we implement RRT
-        self.radius = 10 # radius for RRT* search  method
+        self.radius = 50     # radius for RRT* search  method
 
     # Finds th  optimal node parent  with in given radius 
     # used for RRT* Cost Functionality 

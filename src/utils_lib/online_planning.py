@@ -11,7 +11,7 @@ class StateValidityChecker:
     """ Checks if a position or a path is valid given an occupancy map."""
 
     # Constructor
-    def __init__(self, distance=0.2, is_unknown_valid=True , is_rrt_star = False):
+    def __init__(self, distance=0.2, is_unknown_valid=True , is_rrt_star = True):
         # map: 2D array of integers which categorizes world occupancy
         self.map = None 
         # map sampling resolution (size of a cell))                            
@@ -171,6 +171,7 @@ class StateValidityChecker:
 # The planner returns a path that is a list of poses ([x, y]).
 def compute_path(start_p, goal_p, svc, bounds , max_time=1.0):
     # call rrt class to compute the path , which is imported from othe file
+    print("computing path---")
     rrt = RRT(svc ,10000 ,3, 0.2 , bounds, max_time , svc.is_rrt_star)
     # returns the smooth path and the tree list
     path  , tree_list = rrt.compute_path(start_p, goal_p )
