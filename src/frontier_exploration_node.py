@@ -1,5 +1,4 @@
-
-#!/usr/bin/env python
+#!/usr/bin/python3
 from spatialmath import Quaternion
 import rospy
 import numpy as np
@@ -34,8 +33,10 @@ class FrontierExploration:
         self.frontier_marker.markers = []
         self.clustered_marker = MarkerArray()
         self.clustered_marker.markers = []
-        self.cluster_dist_the = [1,float("inf")]
+        self.cluster_dist_the = [0.2,float("inf")]
         self.svc = StateValidityChecker(  ) 
+        # self.frame_id = "odom"
+        self.frame_id = "world_ned"
         # self.frontier_exploration_pub = rospy.Publisher('/frontier_exploration', String, queue_size=10)
         # self.frontier_exploration_sub = rospy.Subscriber('/frontier_exploration', String, self.frontier_exploration_callback)
         self.frontier_pub = rospy.Publisher('/frontier', MarkerArray, queue_size=2)
@@ -74,11 +75,10 @@ class FrontierExploration:
             [self.width,self.height] = self.grid_map.shape
             self.svc.set(self.grid_map, resolution, origin)
             grid_map2 = self.grid_map.copy()
-            print(self.goal_reached )
-            if  self.current_pose is not None:
+            
+            if  self.current_pose is not None and self.goal_reached:
                 print('Exploring')
                 
-             
                 # intialize frontier map
                 self.dilate_obstacle() # increase the size of the obstacle to consider robot size
                 self.frontier_map = np.zeros_like(self.grid_map)
@@ -126,7 +126,7 @@ class FrontierExploration:
         # Call regionprops function to get characteristics of each frontier
         # Example: size, orientation, centroid
 
-        regions = measure.regionprops(self.labeled_frontier_map)
+        self.regions = measure.regionprops(self.labeled_frontier_map)
         self.clustered_frontier = []  
         grid = copy.deepcopy(self.grid_map)    
         grid[np.where(grid==50)]=127 # Unknown space
@@ -136,7 +136,7 @@ class FrontierExploration:
         grid = cv2.imread("testing.png")
         i= 0
         # print('Number of frontiers:',regions)
-        for region in regions:
+        for region in self.regions:
             
             if region.area > 5.0:
                 # get centroid of each frontier using regionprops property
@@ -158,55 +158,50 @@ class FrontierExploration:
         distance_cost = self.get_clusters_by_distance(self.clustered_frontier)
         keys = list(distance_cost.keys())
 
-
-
         if len(keys)==0:
             return
         else:
-            # get the frontier with minimum distance from the robot
-
-            self.sorted_cluster = dict(sorted(distance_cost.items(), key=lambda item: item[1]))
-            print("sorted_cluster",self.sorted_cluster)
-            self.set_goal_point(self.sorted_cluster)
-            # # get the frontier with higher area
-            # area_cost = self.get_clusters_by_area(keys)
-
-            # # get the frontier with higher density
-            # density_cost = self.get_clusters_by_density(keys)
-
-            # # get the frontier with robot orientation
-            # orientation_cost = self.get_clusters_with_robot_orientation(keys)
-
-
-
+            # get the frontier with size cost
+            size_cost = self.get_clusters_by_size(keys)
+            # get the frontier with  density cost 
+            density_cost = self.get_clusters_by_density(keys)
+            # get the frontier with robot orientation
+            orientation_cost = self.get_clusters_with_robot_orientation(keys)
 
             # calculate the cost of each cluster 
+            cluster_cost = {}
+            for key in keys:
+                distance = distance_cost[key]
+                size = size_cost[key]
+                density = density_cost[key]
+                orientation = orientation_cost[key]
+                cost = 0.4*distance - 0.3*size - 0.1*density + 0.0*orientation
+                
 
-            # for key in self.sorted_cluster:
-            #     distance = distance_cost[key]
-            #     area = area_cost[key]
-            #     density = density_cost[key]
-            #     orientation = orientation_cost[key]
-            #     cost = - distance + area + density - orientation
-
-            #     self.sorted_cluster[key] = cost
-            
+                cluster_cost[key] = cost
+                
+           
+            self.sorted_cluster_cost = dict(sorted(cluster_cost.items(), key=lambda item: item[1],reverse=False))
+           
+            self.sorted_cluster = list(self.sorted_cluster_cost.keys())
+          
+            self.set_goal_point(self.sorted_cluster)
      
-    def set_goal_point(self, goal_point):
+    def set_goal_point(self, sorted_cluster):
 
         ''' this function sets the goal point to move the robot'''
 
         for key in self.sorted_cluster:
             x,y,label = self.clustered_frontier[key]
             goal_point = [x,y]
-            print("goal_point_map",key,goal_point)
+        
             
             if(goal_point is not None and self.svc.is_valid(goal_point) ):
                    
                     goal_point = self.svc.__map_to_position__(goal_point)
-                    print("goal_point_world",goal_point)
+                  
                     goal = PoseStamped()
-                    goal.header.frame_id = "odom"
+                    goal.header.frame_id = "world_ned"
                     goal.header.stamp = rospy.Time.now()
                     goal.pose.position.x = goal_point[0]
                     goal.pose.position.y = goal_point[1]
@@ -214,37 +209,45 @@ class FrontierExploration:
                     self.move_goal_sub.publish(goal)
                     break
 
-        def get_clusters_by_distance(self, centroids):
-            ''' this function filters the frontier clusters with small distance from the robot'''
-            distance_cost = {}
-            out_range_cluster = {}
-            i = 0
-            for centroid in centroids:
-                # get centroid of each frontier using regionprops property
-                # centroid = region.centroid
-                x,y,label = centroid
-                # print("current_pose",self.current_pose)
-                x_c, y_c = self.svc.__map_to_position__([x,y])
-                x_r, y_r = self.current_pose[0:2]
-                print("x_c,y_c",x_c,y_c)
-                print("x_r,y_r",x_r,y_r)
-                distance = np.linalg.norm([x_c-x_r,y_c-y_r])
-                print("distance",distance)
-                min_dis , max_dis = self.cluster_dist_the
-                if(min_dis<distance<max_dis):
-                  distance_cost[i] = distance
-                
-                else:
-                    out_range_cluster[i] = distance
-                i = i+1
-            if len(distance_cost)>0:
-                # print("distance_cost",distance_cost)
-                return distance_cost
+    # returns the normalized distance to cluster in dictionary
+    def get_clusters_by_distance(self, clustered_frontier):
+        ''' this function filters the frontier clusters with small distance from the robot'''
+        distance_cost = {}
+        out_range_cluster = {}
+        i = 0
+        for centroid in clustered_frontier:
+            # get centroid of each frontier using regionprops property
+            # centroid = region.centroid
+            x,y,label = centroid
+            # print("current_pose",self.current_pose)
+            x_c, y_c = self.svc.__map_to_position__([x,y])
+            x_r, y_r = self.current_pose[0:2]
+           
+            distance = np.linalg.norm([x_c-x_r,y_c-y_r])
+            min_dis , max_dis = self.cluster_dist_the
+            if(min_dis<distance<max_dis):
+                distance_cost[i] = distance
+            
             else:
-                # print("out_range_cluster",out_range_cluster)
-                return out_range_cluster
-        
-
+                out_range_cluster[i] = distance
+            i = i+1
+        if len(distance_cost)>0:
+            # print("distance_cost",distance_cost)
+            min_val = min(distance_cost.values())
+            max_val = max(distance_cost.values())
+           
+            normalized_sorted_dict = {k: (v-min_val)/(max_val-min_val) for k, v in distance_cost.items()}
+            
+            return normalized_sorted_dict
+        else:
+            # print("out_range_cluster",out_range_cluster)
+            min_val = min(out_range_cluster.values())
+            max_val = max(out_range_cluster.values())
+       
+            normalized_sorted_dict = {k: (v-min_val)/(max_val-min_val) for k, v in out_range_cluster.items()}
+           
+            return normalized_sorted_dict
+    
     def get_clusters_by_size(self, cluster_keys):
         ''' this function filters the frontier clusters with higher area'''
         size_cost = {}
@@ -254,13 +257,18 @@ class FrontierExploration:
             # centroid = region.centroid
             x,y,label = self.clustered_frontier[key]
             
-            region = measure.regionprops(self.labeled_frontier_map )[label]
+            region = next((region for region in self.regions if region.label == label), None)
             size = region.area
             size_cost[key] = size
-            
-        return size_cost
-        pass
 
+        min_val = min(size_cost.values())
+        max_val = max(size_cost.values())
+        print("size_cost",size_cost)
+        size_cost = {k: (v-min_val)/(max_val-min_val) for k, v in size_cost.items()}  
+        print("size_cost_norm",size_cost)
+        return size_cost
+        
+    # returns normalized density of cluster in density_cost
     def get_clusters_by_density(self, cluster_keys):
         ''' this function filters the frontier clusters with higher density'''
         density_cost = {}
@@ -268,7 +276,9 @@ class FrontierExploration:
             # get centroid of each frontier using regionprops property
             # centroid = region.centroid
             x,y,label = self.clustered_frontier[key]
-            region = measure.regionprops(self.labeled_frontier_map)[label]
+            # Get the region with the desired label
+            region = next((region for region in self.regions if region.label == label), None)
+            
             bbox = region.bbox
             x1,y1,x2,y2 = bbox
             covered_area = (x2-x1)*(y2-y1)
@@ -276,6 +286,11 @@ class FrontierExploration:
             no_of_points = len(region.coords)
             density = covered_area/size
             density_cost[key] = density 
+        min_val = min(density_cost.values())
+        max_val = max(density_cost.values())
+        print("density_cost",density_cost)
+        density_cost = {k: (v-min_val)/(max_val-min_val) for k, v in density_cost.items()} 
+        print("density_cost_norm",density_cost) 
         return density_cost
 
     def get_clusters_with_robot_orientation(self, clusters_keys):
@@ -285,20 +300,22 @@ class FrontierExploration:
             # get centroid of each frontier using regionprops property
             # centroid = region.centroid
 
-            x,y,label = self.candidate_frontier[key]
+            x,y,label = self.clustered_frontier[key]
             x_r, y_r,yaw = self.current_pose
-            orientation_diff= wrap_angle(math.atan2(y-y_r,x-x_r))
-            orientation_cost[key] = orientation_diff
+            orientation_diff= wrap_angle(yaw - math.atan2(y-y_r,x-x_r) )
+            orientation_cost[key] = abs(orientation_diff)
 
+        min_val = min(orientation_cost.values())
+        max_val = max(orientation_cost.values())
+       
+        orientation_cost = {k: (v-min_val)/(max_val-min_val) for k, v in orientation_cost.items()}  
+       
         return orientation_cost
     
-
     def get_clusters_with_higher_information_gain(self, regions):
         ''' this function filters the frontier clusters with higher information gain'''
 
-
         pass
-
     def get_odom(self, odom):
         # print("get_odom")
         _, _, yaw = tf.transformations.euler_from_quaternion([odom.pose.pose.orientation.x, 
@@ -315,7 +332,7 @@ class FrontierExploration:
             myMarker = Marker()
             myMarker.header.stamp = rospy.Time.now()
                 
-            myMarker.header.frame_id = "odom"
+            myMarker.header.frame_id = "world_ned"
             myMarker.type = myMarker.POINTS
             myMarker.action = myMarker.ADD
             myMarker.id = 0

@@ -37,18 +37,21 @@ class OnlinePlanner:
         self.tolorance = 0.05
         # CONTROLLER PARAMETERS
         # Proportional linear velocity controller gain
-        self.Kv = 0.5
+        self.Kv = 0.4
         # Proportional angular velocity controller gain                   
-        self.Kw = 2
+        self.Kw = 0.4
         # Maximum linear velocity control action                   
-        self.v_max = 0.2
+        self.v_max = 0.1
         # Maximum angular velocity control action               
-        self.w_max = 0.3                
+        self.w_max = 0.2                
         self.retry = 0 # Retry counter for planning failures
+        self.wheel_radius = 0.035 # meters      
+        self.wheel_base_distance = 0.257 # meters  
         # PUBLISHERS
         # Publisher for sending velocity commands to the robot
         # self.cmd_pub = None # TODO: publisher to cmd_vel_topic
-        self.cmd_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=1)
+        # self.cmd_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=1)
+        self.cmd_pub = rospy.Publisher('/turtlebot/kobuki/commands/wheel_velocities', Float64MultiArray, queue_size=1)
         # Publisher for visualizing the path to with rviz
         self.marker_pub = rospy.Publisher('~path_marker', Marker, queue_size=1)
         self.tree_pub = rospy.Publisher('~tree_marker', Marker, queue_size=1)
@@ -133,7 +136,7 @@ class OnlinePlanner:
               print("move forward to recover")
               v = self.v_max
         start_time = rospy.Time.now()
-        duration = 5
+        duration = 2
         while(rospy.Time.now() - start_time).to_sec() < duration:
             # print("publish")
             self.__send_commnd__(v,0)  
@@ -206,7 +209,7 @@ class OnlinePlanner:
             # TODO: If planning fails, consider increasing the planning time, retry the planning a few times, etc.
             ...
 
-            if len(self.path) == 0  :
+            if len(self.path) == 0  or []:
                 self.path_not_found = True
                               
             else:
@@ -249,6 +252,7 @@ class OnlinePlanner:
             else: # TODO: Compute velocities using controller function in utils_lib
               
                 v , w = move_to_point(self.current_pose, self.path[0], self.Kv , self.Kw )
+                
         # Publish velocity commands 
         self.__send_commnd__(v, w)
     
@@ -256,19 +260,33 @@ class OnlinePlanner:
     # PUBLISHER HELPERS
     # Transform linear and angular velocity (v, w) into a Twist message and publish it
     def __send_commnd__(self, v, w):
-       
+        # print("send command" , v , w)
         self.cmd.linear.x = np.clip(v, -self.v_max, self.v_max)
         self.cmd.linear.y = 0
         self.cmd.linear.z = 0
         self.cmd.angular.x = 0
         self.cmd.angular.y = 0
         self.cmd.angular.z = np.clip(w, -self.w_max, self.w_max)
-        self.cmd_pub.publish(self.cmd)
+
+        rate = rospy.Rate(100)   
+        move = Float64MultiArray() 
+       
+         
+        v_l = (2 * v + w * self.wheel_base_distance) / (2 * self.wheel_radius)
+        v_r = (2 * v - w * self.wheel_base_distance) / (2 * self.wheel_radius) 
+        # print("v_l = ", v_l) 
+        # print("v_r = ", v_r)
+        move.data = [v_l, v_r]         
+        
+        #move.data = [1.5*v_l, 1.5*v_r]         
+        # rospy.loginfo(move)    
+        self.cmd_pub.publish(move) 
+        # self.cmd_pub.publish(self.cmd)
     # Publish a path as a series of line markers
     def draw_tree(self):
         if(len(self.edges) > 0):
             m = Marker()
-            m.header.frame_id = 'odom'
+            m.header.frame_id = 'world_net'
             m.header.stamp = rospy.Time.now()
             m.id = 0
             m.type = Marker.LINE_LIST
@@ -304,7 +322,7 @@ class OnlinePlanner:
         if len(self.path) > 1:
             print("Publish path!")
             m = Marker()
-            m.header.frame_id = 'odom'
+            m.header.frame_id = 'world_ned'
             m.header.stamp = rospy.Time.now()
             m.id = 0
             m.type = Marker.LINE_STRIP
