@@ -18,8 +18,8 @@
         <param name="is_rrt_star" value="$(arg is_rrt_star)" />
         <param name="is_unknown_valid" value="$(arg is_unknown_valid)" />
     </node>
-    <node name="exploration" pkg="frontier_exploration" type="frontier_exploration_node.py" output="screen">
-    </node>
+    <!-- <node name="exploration" pkg="frontier_exploration" type="frontier_exploration_node.py" output="screen"> -->
+    <!-- </node> -->
 
 
 </launch>

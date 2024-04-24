@@ -3,6 +3,7 @@ import numpy as np
 from matplotlib import pyplot as plt 
 from PIL import Image 
 from math import sqrt
+import time
 import random
 # class that represent a node in the RRT tree
 class Node:
@@ -61,7 +62,9 @@ class RRT:
         self.path          = [ ]
         self.smoothed_path = [ ]
         self.is_RRT_star = True # by deafault it is False we implement RRT
-        self.radius = 50     # radius for RRT* search  method
+        self.radius = 10    # radius for RRT* search  method
+        self.max_time = 10 # max time for the search
+        self.goal_found = False
 
     # Finds th  optimal node parent  with in given radius 
     # used for RRT* Cost Functionality 
@@ -90,7 +93,16 @@ class RRT:
                 node.parent = qnew
                 node.g_score = new_node_cost
                 node.f_score = node.g_score + node.get_distance(self.goal)
+                self.propagate_cost_to_leaves(node)
 
+    def propagate_cost_to_leaves(self, parent_node):
+
+        for node in self.vertices:
+            if node.parent == parent_node:
+                node.g_score = parent_node.g_score + node.get_distance(parent_node)
+                self.propagate_cost_to_leaves(node)
+    
+    
     def Rand_Config(self):       
         
         prob = random.random() # generate a random number between 0 and 1
@@ -109,7 +121,10 @@ class RRT:
     def New_Config(self , qnear , qrand):
         dir_vector = np.array([qrand.x -  qnear.x , qrand.y - qnear.y])
         length = qnear.get_distance(qrand)
+        if(length == 0):
+            return qrand
         norm_vector = dir_vector/length
+
         if(self.q > length):
             return qrand
         qnew = np.array([qnear.x,qnear.y]) + norm_vector*self.q      
@@ -143,9 +158,10 @@ class RRT:
                 break
             counter +=1
         # incase the max iteration is reached we can't smooth the path return the path 
-        if(counter >= max_iterations):
-            print("max iteration reached")
-            self.smoothed_path = self.path
+
+        # if(counter >= max_iterations):
+        #     print("max iteration reached")
+        #     self.smoothed_path = self.path
 
         self.smoothed_path.reverse()
         path =[(n.x,n.y) for n in self.smoothed_path]
@@ -157,7 +173,7 @@ class RRT:
         tree_list = [[[edge[0].x , edge[0].y] ,[edge[1].x , edge[1].y]] for edge in self.edges]
         return tree_list
     def compute_path(self , start , goal):
-
+        self.start_time = time.time()
         self.start = Node(start[0],start[1])   
         self.goal =  Node(goal[0],goal[1])
         self.vertices.append(self.start) # initialize the vertices list 
@@ -183,15 +199,26 @@ class RRT:
                 qnew.id = self.node_counter 
                 qnew.g_score = qnear.g_score + qnew.get_distance(qnear)
                 qnew.f_score = qnear.g_score + qnew.calcu_huristic(self.goal)
-
+                self.node_counter +=1
                 # Implement rewire here
                 if(self.is_RRT_star == True): # if is RRT star is true we implemet rewire function
                     self.rewire(qnew)
 
                 if(qnew == self.goal):
+                    self.goal_found = True
+                    print("goal found")
+
                     self.reconstract_path()
                     # self.smoothed_path
                     return  self.smooth_path() , self.get_tree() 
-                    
-                self.node_counter +=1
+        #     if((time.time() - self.start_time) > self.max_time ):
+        #         print("max time reached")
+        #         break
+        #         print("k",k)
+        # if(self.goal_found):
+        #     print("goal found reconstracting path")
+        #     self.reconstract_path()
+            # self.smoothed_path
+            # return  self.smooth_path() , self.get_tree()
+                
         return [], self.get_tree()

@@ -33,7 +33,7 @@ class FrontierExploration:
         self.frontier_marker.markers = []
         self.clustered_marker = MarkerArray()
         self.clustered_marker.markers = []
-        self.cluster_dist_the = [0.2,float("inf")]
+        self.cluster_dist_the = [0.5,float("inf")]
         self.svc = StateValidityChecker(  ) 
         # self.frame_id = "odom"
         self.frame_id = "world_ned"
@@ -41,6 +41,10 @@ class FrontierExploration:
         # self.frontier_exploration_sub = rospy.Subscriber('/frontier_exploration', String, self.frontier_exploration_callback)
         self.frontier_pub = rospy.Publisher('/frontier', MarkerArray, queue_size=2)
         self.cluster_pub = rospy.Publisher('/clustered_frontiers', MarkerArray, queue_size=2)
+        self.selec_fr_pub = rospy.Publisher('/selected_frontier', Marker, queue_size=2)
+
+
+
         
         # SUBSCRIBERS
         rospy.Subscriber('/odom', Odometry, self.get_odom)
@@ -92,7 +96,6 @@ class FrontierExploration:
                 if( self.goal_reached ):
                     self.goal_reached = False
                     self.candidate_frontier()
-
             
     def set_frontier_map(self):
 
@@ -115,8 +118,7 @@ class FrontierExploration:
        
         self.publish_frontiers()
         return self.frontier_map , self.frontier_list
-       
-        
+             
     def cluster_frontier(self):
         ''' this function clusters the frontier to get the candidate frontiers'''
 
@@ -157,7 +159,7 @@ class FrontierExploration:
         
         distance_cost = self.get_clusters_by_distance(self.clustered_frontier)
         keys = list(distance_cost.keys())
-
+        print("keys",keys)
         if len(keys)==0:
             return
         else:
@@ -195,7 +197,7 @@ class FrontierExploration:
             x,y,label = self.clustered_frontier[key]
             goal_point = [x,y]
         
-            
+            print("goal_point",goal_point)
             if(goal_point is not None and self.svc.is_valid(goal_point) ):
                    
                     goal_point = self.svc.__map_to_position__(goal_point)
@@ -205,8 +207,9 @@ class FrontierExploration:
                     goal.header.stamp = rospy.Time.now()
                     goal.pose.position.x = goal_point[0]
                     goal.pose.position.y = goal_point[1]
-                
+                    self.publish_selected_frontier(goal_point)
                     self.move_goal_sub.publish(goal)
+                    
                     break
 
     # returns the normalized distance to cluster in dictionary
@@ -244,7 +247,7 @@ class FrontierExploration:
             min_val = min(out_range_cluster.values())
             max_val = max(out_range_cluster.values())
        
-            normalized_sorted_dict = {k: (v-min_val)/(max_val-min_val) for k, v in out_range_cluster.items()}
+            normalized_sorted_dict = {k: (v)/(max_val) for k, v in out_range_cluster.items()}
            
             return normalized_sorted_dict
     
@@ -264,7 +267,7 @@ class FrontierExploration:
         min_val = min(size_cost.values())
         max_val = max(size_cost.values())
         print("size_cost",size_cost)
-        size_cost = {k: (v-min_val)/(max_val-min_val) for k, v in size_cost.items()}  
+        size_cost = {k: (v)/(max_val) for k, v in size_cost.items()}  
         print("size_cost_norm",size_cost)
         return size_cost
         
@@ -289,7 +292,7 @@ class FrontierExploration:
         min_val = min(density_cost.values())
         max_val = max(density_cost.values())
         print("density_cost",density_cost)
-        density_cost = {k: (v-min_val)/(max_val-min_val) for k, v in density_cost.items()} 
+        density_cost = {k: (v)/(max_val) for k, v in density_cost.items()} 
         print("density_cost_norm",density_cost) 
         return density_cost
 
@@ -308,8 +311,8 @@ class FrontierExploration:
         min_val = min(orientation_cost.values())
         max_val = max(orientation_cost.values())
        
-        orientation_cost = {k: (v-min_val)/(max_val-min_val) for k, v in orientation_cost.items()}  
-       
+        orientation_cost = {k: (v)/(max_val) for k, v in orientation_cost.items()}  
+        print("orientation_cost",orientation_cost)
         return orientation_cost
     
     def get_clusters_with_higher_information_gain(self, regions):
@@ -336,18 +339,25 @@ class FrontierExploration:
             myMarker.type = myMarker.POINTS
             myMarker.action = myMarker.ADD
             myMarker.id = 0
-            myMarker.color=ColorRGBA(0.5, 0.5, 1, 1)
+            color_blue = ColorRGBA()
+            color_blue.r = 0
+            color_blue.g = 1
+            color_blue.b = 0
+            color_blue.a = 1
+          
+            myMarker.color=color_blue
+            
     
-            myMarker.scale.x = 0.1
-            myMarker.scale.y = 0.1
+            myMarker.scale.x = 0.12
+            myMarker.scale.y = 0.12
             myMarker.scale.z = 0.1
             myMarker.pose.orientation = Quaternion()
             myMarker.pose.orientation.x = 0.0
             myMarker.pose.orientation.y = 0.0
             myMarker.pose.orientation.z = 0.0
             myMarker.pose.orientation.w = 1.0
-           
-    
+            myMarker.lifetime = rospy.Duration(30)
+            
             for f in self.clustered_frontier:
                 
                 frontier_world = self.svc.__map_to_position__(f[0:2]) 
@@ -368,16 +378,22 @@ class FrontierExploration:
         myMarker = Marker()
         myMarker.header.stamp = rospy.Time.now()
             
-        myMarker.header.frame_id = "odom"
+        myMarker.header.frame_id = "world_ned"
         myMarker.type = myMarker.POINTS
         myMarker.action = myMarker.ADD
      
-        myMarker.color=ColorRGBA(0.224, 1, 0, 1)
+        color_green = ColorRGBA()
+        color_green.r = 0
+        color_green.g = 0
+        color_green.b = 1
+        color_green.a = 1
+        myMarker.color=color_green
 
         myMarker.scale.x = 0.03
         myMarker.scale.y = 0.03
         myMarker.scale.z = 0.03
         myMarker.id = 0
+        myMarker.lifetime = rospy.Duration(10)
 
         for f in self.frontier_list:
                  
@@ -392,6 +408,39 @@ class FrontierExploration:
         self.frontier_marker.markers.append(myMarker)
         self.frontier_pub.publish(self.frontier_marker)
     
+
+    def publish_selected_frontier(self, goal_point):
+        ''' this function publishes the selected frontier to move the robot'''
+        myMarker = Marker()
+        myMarker.header.stamp = rospy.Time.now()
+            
+        myMarker.header.frame_id = "world_ned"
+        myMarker.type = myMarker.POINTS
+        myMarker.action = myMarker.ADD
+        myMarker.id = 0
+
+        color_green = ColorRGBA()
+        color_green.r = 1
+        color_green.g = 1
+        color_green.b = 0
+        color_green.a = 1
+        myMarker.color=color_green
+
+
+        myMarker.scale.x = 0.1
+        myMarker.scale.y = 0.1
+        myMarker.scale.z = 0.03
+
+        frontier_world =goal_point
+        myPoint = Point()
+        myPoint.x = frontier_world[0]
+        myPoint.y = frontier_world[1]
+        myPoint.z = 0
+
+        myMarker.points.append(myPoint)
+        self.selec_fr_pub.publish(myMarker)
+
+
     def dilate_obstacle(self):
         ''' this function dilates the obstacle to consider the robot size'''
 

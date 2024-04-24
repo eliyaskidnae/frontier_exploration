@@ -91,7 +91,9 @@ class StateValidityChecker:
         lower_x , lower_y = m[0] - grid_distance , m[1] - grid_distance  
         for lx in range(0,2*grid_distance):
             for ly in range(0,2*grid_distance):
-                pose = lower_x + lx, lower_y + ly              
+                pose = lower_x + lx, lower_y + ly    
+                # if(self.map[pose[0],pose[1]] >50):
+                #     return pose
                 # if one of the position is not free return False  , stop the loop 
                 if(self.is_onmap(pose)):                           
                     if(not self.is_free(pose)): 

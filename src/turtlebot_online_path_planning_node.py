@@ -46,7 +46,7 @@ class OnlinePlanner:
         self.w_max = 0.2                
         self.retry = 0 # Retry counter for planning failures
         self.wheel_radius = 0.035 # meters      
-        self.wheel_base_distance = 0.257 # meters  
+        self.wheel_base_distance = 0.235  # meters  
         # PUBLISHERS
         # Publisher for sending velocity commands to the robot
         # self.cmd_pub = None # TODO: publisher to cmd_vel_topic
@@ -118,30 +118,30 @@ class OnlinePlanner:
             self.__send_commnd__(0, self.w_max)  
         self.__send_commnd__(0, 0)
 
-
     def recovery_behavior(self):
         pose = self.svc.not_valid_pose(self.current_pose[0:2])
-        pose = self.svc.__map_to_position__(pose)
-        psi_d = math.atan2(pose[1] - self.current_pose[1] , pose[0]- self.current_pose[0])
+        if pose is not None:
+            pose = self.svc.__map_to_position__(pose)
+            psi_d = math.atan2(pose[1] - self.current_pose[1] , pose[0]- self.current_pose[0])
 
-        print("recovery behavior", psi_d , self.current_pose[2])
-        print(pose ,self.current_pose)
-        print(math.degrees(psi_d) , math.degrees(self.current_pose[2]))
-        angle = math.degrees(wrap_angle(psi_d - self.current_pose[2]))
-    
-        if( -90 < angle < 90):
-              print("move back ward to recover")
-              v = -self.v_max
-        else:
-              print("move forward to recover")
-              v = self.v_max
-        start_time = rospy.Time.now()
-        duration = 2
-        while(rospy.Time.now() - start_time).to_sec() < duration:
-            # print("publish")
-            self.__send_commnd__(v,0)  
-        print("recovery behavior done")
-        self.__send_commnd__(0, 0)
+            print("recovery behavior", psi_d , self.current_pose[2])
+            print(pose ,self.current_pose)
+            print(math.degrees(psi_d) , math.degrees(self.current_pose[2]))
+            angle = math.degrees(wrap_angle(psi_d - self.current_pose[2]))
+        
+            if( -90 < angle < 90):
+                print("move back ward to recover")
+                v = -self.v_max
+            else:
+                print("move forward to recover")
+                v = self.v_max
+            start_time = rospy.Time.now()
+            duration = 2
+            while(rospy.Time.now() - start_time).to_sec() < duration:
+                # print("publish")
+                self.__send_commnd__(v,0)  
+            print("recovery behavior done")
+            self.__send_commnd__(0, 0)
 
     def get_gridmap(self, gridmap):
        
@@ -155,6 +155,10 @@ class OnlinePlanner:
       
             # print("Map received" , origin , gridmap.info.height , gridmap.info.width)
             # check if the goal and robot current pose is valid
+            if(self.svc.is_valid(self.current_pose[0:2])):
+             rospy.logwarn("Start Point is not valid , please move around ")
+             self.recovery_behavior() # move around to find a valid point
+            # If the robot is following a path, check if it is still valid
             if(self.goal is not None and not self.svc.is_valid(self.goal)):
                 rospy.logwarn("Goal Point is not valid , please try again")
                 # publish goal reach for new exploration 
@@ -162,10 +166,7 @@ class OnlinePlanner:
                 msg = True 
                 self.goal_reach.publish(msg)
 
-            if(self.goal is not None and not self.svc.is_valid(self.current_pose[0:2])):
-             rospy.logwarn("Start Point is not valid , please move around ")
-             self.recovery_behavior() # move around to find a valid point
-            # If the robot is following a path, check if it is still valid
+            
             if self.path is not None and len(self.path) > 0:
                 # create total_path adding the current position to the rest of waypoints in the path
                 total_path = [self.current_pose[0:2]] + self.path
@@ -176,7 +177,10 @@ class OnlinePlanner:
                    rospy.loginfo("Replan agian current  path is in valid ")
 
                 #    self.__send_commnd__(0, 0)
-                   
+                #    self.path = []
+                #    msg = Bool()
+                #    msg = True 
+                #    self.goal_reach.publish(msg)
                    self.plan()
                 # TODO: check total_path validity. If total_path is not valid replan a new path to the goal
             
@@ -199,6 +203,10 @@ class OnlinePlanner:
             msg = Bool()
             msg = True
             self.goal_reach.publish(msg)
+
+        elif(not self.svc.is_valid(self.current_pose[0:2])):
+            rospy.logwarn("Start Point is not valid , please move around ")
+            self.recovery_behavior()
 
         # print("Compute new path") 
         # TODO: plan a path from self.current_pose to self.goal
@@ -256,7 +264,6 @@ class OnlinePlanner:
         # Publish velocity commands 
         self.__send_commnd__(v, w)
     
-
     # PUBLISHER HELPERS
     # Transform linear and angular velocity (v, w) into a Twist message and publish it
     def __send_commnd__(self, v, w):
@@ -267,18 +274,19 @@ class OnlinePlanner:
         self.cmd.angular.x = 0
         self.cmd.angular.y = 0
         self.cmd.angular.z = np.clip(w, -self.w_max, self.w_max)
+        v = self.cmd.linear.x
+        w = self.cmd.angular.z
 
-        rate = rospy.Rate(100)   
         move = Float64MultiArray() 
        
          
-        v_l = (2 * v + w * self.wheel_base_distance) / (2 * self.wheel_radius)
-        v_r = (2 * v - w * self.wheel_base_distance) / (2 * self.wheel_radius) 
-        # print("v_l = ", v_l) 
-        # print("v_r = ", v_r)
+        v_l = (v + w * self.wheel_base_distance/2) / ( self.wheel_radius)
+        v_r = (v - w * self.wheel_base_distance/2) / (self.wheel_radius) 
+
+
+      
         move.data = [v_l, v_r]         
-        
-        #move.data = [1.5*v_l, 1.5*v_r]         
+     
         # rospy.loginfo(move)    
         self.cmd_pub.publish(move) 
         # self.cmd_pub.publish(self.cmd)
@@ -296,7 +304,7 @@ class OnlinePlanner:
             self.marker_pub.publish(m)
 
             m.action = Marker.ADD
-            m.scale.x = 0.04
+            m.scale.x = 0.02
             m.scale.y = 0.0
             m.scale.z = 0.0
 
@@ -332,7 +340,7 @@ class OnlinePlanner:
             self.marker_pub.publish(m)
 
             m.action = Marker.ADD
-            m.scale.x = 0.06
+            m.scale.x = 0.04
             m.scale.y = 0.0
             m.scale.z = 0.0
             
