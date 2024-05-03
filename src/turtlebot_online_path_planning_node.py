@@ -14,7 +14,7 @@ from nav_msgs.msg import OccupancyGrid
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Bool
 from std_msgs.msg import Float64MultiArray
-from utils_lib.online_planning import StateValidityChecker, move_to_point, compute_path , wrap_angle
+from utils_lib.online_planning import StateValidityChecker, move_to_point, move_to_point_dw , compute_path , wrap_angle ,move_to_point_smooth
 class OnlinePlanner:
     # OnlinePlanner Constructor
     def __init__(self, gridmap_topic, odom_topic, cmd_vel_topic, bounds, distance_threshold ,is_unknown_valid ,is_rrt_star):
@@ -37,16 +37,18 @@ class OnlinePlanner:
         self.tolorance = 0.05
         # CONTROLLER PARAMETERS
         # Proportional linear velocity controller gain
-        self.Kv = 0.4
+        self.Kv = 0.5
         # Proportional angular velocity controller gain                   
-        self.Kw = 0.4
+        self.Kw = 0.5
         # Maximum linear velocity control action                   
-        self.v_max = 0.1
+        self.v_max = 0.15
         # Maximum angular velocity control action               
-        self.w_max = 0.2                
+        self.w_max = 0.3            
         self.retry = 0 # Retry counter for planning failures
         self.wheel_radius = 0.035 # meters      
         self.wheel_base_distance = 0.235  # meters  
+        self.v = 0
+        self.w = 0
         # PUBLISHERS
         # Publisher for sending velocity commands to the robot
         # self.cmd_pub = None # TODO: publisher to cmd_vel_topic
@@ -61,8 +63,9 @@ class OnlinePlanner:
         # self.odom_sub = None # TODO: subscriber to odom_topic  
 
         self.odom = rospy.Subscriber(odom_topic, Odometry, self.get_odom)
-        
-        # self.move_goal_sub = None # TODO: subscriber to /move_base_simple/goal published by rviz 
+
+        self.flag = True
+        # self.move_goal_sub = None # TODO: subscriber to /move_base_simple/goal plublished by rviz 
         self.move_goal_sub = rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.get_goal, queue_size=1)
         self.cmd = Twist()
         # TIMERS
@@ -86,7 +89,7 @@ class OnlinePlanner:
         
         if self.svc.there_is_map: 
             self.retry = 0
-            print("goal callback" , goal.pose.position.x , goal.pose.position.y)
+            # print("goal callback" , goal.pose.position.x , goal.pose.position.y)
             # TODO: Store goal (x,y) as a numpy aray in self.goal var and print it 
             self.goal = np.array([goal.pose.position.x, goal.pose.position.y])  
             print("goal point ",self.goal)
@@ -117,6 +120,15 @@ class OnlinePlanner:
             # print("publish")
             self.__send_commnd__(0, self.w_max)  
         self.__send_commnd__(0, 0)
+    def move_back(self):
+        start_time = rospy.Time.now()
+        duration = 0.7
+        print("move back entered")
+        while(rospy.Time.now() - start_time).to_sec() < duration:
+        
+            self.__send_commnd__(-self.v_max , 0)  
+        self.__send_commnd__(0, 0)
+
 
     def recovery_behavior(self):
         pose = self.svc.not_valid_pose(self.current_pose[0:2])
@@ -124,7 +136,7 @@ class OnlinePlanner:
             pose = self.svc.__map_to_position__(pose)
             psi_d = math.atan2(pose[1] - self.current_pose[1] , pose[0]- self.current_pose[0])
 
-            print("recovery behavior", psi_d , self.current_pose[2])
+            # print("recovery behavior", psi_d , self.current_pose[2])
             print(pose ,self.current_pose)
             print(math.degrees(psi_d) , math.degrees(self.current_pose[2]))
             angle = math.degrees(wrap_angle(psi_d - self.current_pose[2]))
@@ -156,11 +168,11 @@ class OnlinePlanner:
             # print("Map received" , origin , gridmap.info.height , gridmap.info.width)
             # check if the goal and robot current pose is valid
             if(self.svc.is_valid(self.current_pose[0:2])):
-             rospy.logwarn("Start Point is not valid , please move around ")
+            #  rospy.logwarn("Start Point is not valid , please move around ")
              self.recovery_behavior() # move around to find a valid point
             # If the robot is following a path, check if it is still valid
             if(self.goal is not None and not self.svc.is_valid(self.goal)):
-                rospy.logwarn("Goal Point is not valid , please try again")
+                # rospy.logwarn("Goal Point is not valid , please try again")
                 # publish goal reach for new exploration 
                 msg = Bool()
                 msg = True 
@@ -172,12 +184,12 @@ class OnlinePlanner:
                 total_path = [self.current_pose[0:2]] + self.path
 
                 # if path is not valid and is uknown_valid is false, replan a new path to the goal
-                if(not self.svc.check_path(total_path) and self.svc.is_unknown_valid ):
+                if(not self.svc.check_path(total_path)):
                    
                    rospy.loginfo("Replan agian current  path is in valid ")
 
                 #    self.__send_commnd__(0, 0)
-                #    self.path = []
+                   self.path = []
                 #    msg = Bool()
                 #    msg = True 
                 #    self.goal_reach.publish(msg)
@@ -185,59 +197,67 @@ class OnlinePlanner:
                 # TODO: check total_path validity. If total_path is not valid replan a new path to the goal
             
             # If the robot is not following a path, but there is a goal, plan a new path to the goal
-            elif  self.goal is not None and self.svc.is_valid(self.goal) and len(self.path) == 0:
+            # elif  self.goal is not None and self.svc.is_valid(self.goal) and len(self.path) == 0:
              
-                if(self.retry < 3):
-                    self.retry += 1
-                    rospy.loginfo("Retry Planning ")
-                    self.plan()
+            #     if(self.retry < 3):
+            #         self.retry += 1
+            #         rospy.loginfo("Retry Planning ")
+            #         self.plan()
                 
 
     # Solve plan from current position to self.goal. 
     def plan(self):
-        # Invalidate previous plan if available
-        self.path = []
-        print("Plan_goal"  , self.goal)
-        if(not self.svc.is_valid(self.goal)):
-            rospy.logwarn("Goal is not valid, Target place is not safe")
-            msg = Bool()
-            msg = True
-            self.goal_reach.publish(msg)
+        trial = 0
+        while trial < 5:
+            # Invalidate previous plan if available
+            self.path = []
+            # print("Plan_goal"  , self.goal)
+            if(not self.svc.is_valid(self.goal)):
+                # rospy.logwarn("Goal is not valid, Target place is not safe")
+                msg = Bool()
+                msg = True
+                self.goal_reach.publish(msg)
 
-        elif(not self.svc.is_valid(self.current_pose[0:2])):
-            rospy.logwarn("Start Point is not valid , please move around ")
-            self.recovery_behavior()
+            elif(not self.svc.is_valid(self.current_pose[0:2])):
+                # rospy.logwarn("Start Point is not valid , please move around ")
+                self.recovery_behavior()
 
-        # print("Compute new path") 
-        # TODO: plan a path from self.current_pose to self.goal
-        else : 
-            self.path , self.edges = compute_path(self.current_pose , self.goal , self.svc , self.bounds)
-            self.draw_tree()
+            # print("Compute new path") 
+            # TODO: plan a path from self.current_pose to self.goal
+            else : 
+                self.path , self.tree = compute_path(self.current_pose , self.goal , self.svc , self.bounds)
+                # self.draw_tree()
+                print("path_online" , self.path)
 
-            # TODO: If planning fails, consider increasing the planning time, retry the planning a few times, etc.
-            ...
+                # TODO: If planning fails, consider increasing the planning time, retry the planning a few times, etc.
+                ...
 
-            if len(self.path) == 0  or []:
-                self.path_not_found = True
-                              
-            else:
-                rospy.loginfo("Path Found !")
-                print("Path Found !" , self.path)
-                self.path_not_found = True
-                self.retry = 0 # reset retry counter
-                # Publish plan marker to visualize in rviz
-                self.publish_path()
-                # remove initial waypoint in the path (current pose is already reached)
-                print("current pose" , self.path[0])
-                if self.path[0]:
-                    del self.path[0]                   
-            
-    # This method is called every 0.1s. It computes the velocity comands in order to reach the 
-    # next waypoint in the path. It also sends zero velocity commands if there is no active path.
+                if len(self.path) == 0  or []:
+                    rospy.logwarn("Path Not Found !")
+                    self.path_not_found = True
+                                
+                else:
+                    rospy.loginfo("Path Found !")
+                    print("Path Found !" , self.path)
+                    self.retry = 0 # reset retry counter
+                    # Publish plan marker to visualize in rviz
+                    self.publish_path()
+                    # remove initial waypoint in the path (current pose is already reached)
+                    if self.path[0]:
+                        del self.path[0]                   
+                    print("path_online after " , self.path)
+                    break   
+            print("Retry Planning") 
+            trial += 1
+        # This method is called every 0.1s. It computes the velocity comands in order to reach the 
+        # next waypoint in the path. It also sends zero velocity commands if there is no active path.
+
     def controller(self, event):
-        v = 0
-        w = 0
-       
+        # if self.flag == True:
+        #     self.v = 0
+        #     self.w = 0
+        
+        
         if len(self.path) > 0:
             distance_to_goal = self.distance_to_target(self.path[0])
 
@@ -248,27 +268,36 @@ class OnlinePlanner:
                 
                 if(len(self.path) == 0 ):
                     rospy.loginfo("Goal Point Reached !")
-                 
+                    print("Goal Point Reached ! move back a little bit")
+                    self.move_back()
                     # self.rotate_to_explore()
                     self.goal = None
-                    msg = Bool()
+                    msg = Bool()    
                     msg = True
                     self.goal_reach.publish(msg)
                     self.retry = 0
+                    self.v = 0
+                    self.w = 0
                    
                 
             else: # TODO: Compute velocities using controller function in utils_lib
               
-                v , w = move_to_point(self.current_pose, self.path[0], self.Kv , self.Kw )
-                
+                # v , w = move_to_point(self.current_pose, self.path[0], self.Kv , self.Kw )
+                self.v ,self.w = move_to_point_smooth(self.current_pose, self.path[0])
+                # x = [self.current_pose[0] , self.current_pose[1] , self.current_pose[2] , self.v , self.w]
+                # contriol , traj  = move_to_point_dw(x, self.path[0])
+                # self.v = contriol[0]
+                # self.w = contriol[1]
+
         # Publish velocity commands 
-        self.__send_commnd__(v, w)
+        self.__send_commnd__(self.v, self.w)
     
     # PUBLISHER HELPERS
     # Transform linear and angular velocity (v, w) into a Twist message and publish it
     def __send_commnd__(self, v, w):
         # print("send command" , v , w)
         self.cmd.linear.x = np.clip(v, -self.v_max, self.v_max)
+        
         self.cmd.linear.y = 0
         self.cmd.linear.z = 0
         self.cmd.angular.x = 0
@@ -280,8 +309,8 @@ class OnlinePlanner:
         move = Float64MultiArray() 
        
          
-        v_l = (v + w * self.wheel_base_distance/2) / ( self.wheel_radius)
-        v_r = (v - w * self.wheel_base_distance/2) / (self.wheel_radius) 
+        v_l = (2*v + w * self.wheel_base_distance/2) / ( self.wheel_radius)
+        v_r = (2*v - w * self.wheel_base_distance/2) / (self.wheel_radius) 
 
 
       
@@ -327,8 +356,9 @@ class OnlinePlanner:
                     m.colors.append(color_black)
             self.tree_pub.publish(m)
     def publish_path(self):
+        path = self.path.copy()
         if len(self.path) > 1:
-            print("Publish path!")
+            # print("Publish path!")
             m = Marker()
             m.header.frame_id = 'world_ned'
             m.header.stamp = rospy.Time.now()
@@ -367,7 +397,7 @@ class OnlinePlanner:
             m.points.append(p)
             m.colors.append(color_blue)
             
-            for n in self.path:
+            for n in path:
                 p = Point()
                 p.x = n[0]
                 p.y = n[1]
@@ -387,10 +417,10 @@ if __name__ == '__main__':
     is_unknown_valid = True
     if rospy.has_param("is_rrt_star"):
         is_rrt_star = bool(rospy.get_param("is_rrt_star")) 
-        print("is_rrt_star" , is_rrt_star)
+        # print("is_rrt_star" , is_rrt_star)
     if rospy.has_param("is_unknown_valid"):
         is_unknown_valid = bool(rospy.get_param("is_unknown_valid"))
-        print("is_unknown_valid" , is_unknown_valid)
+        # print("is_unknown_valid" , is_unknown_valid)
 
 
     node = OnlinePlanner('/projected_map', '/odom', '/cmd_vel', np.array([-10.0, 10.0, -10.0, 10.0]), 

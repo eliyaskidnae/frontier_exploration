@@ -23,12 +23,13 @@ class Node:
         distance = sqrt( (self.x-target.x)**2 + (self.y-target.y)**2 )
         return distance 
     # find the nearest node from the given nodes with in the radius for RRT* method
-    def find_nearest_node(self,nodes):
+    def find_nearest_node(self,nodes ):
         min_distance = float('inf')
         nearest_node = None
         for node in nodes:
             distance = self.get_distance(node)
-            if(distance < min_distance):
+            # if(distance < min_distance and distance != 0 and node != target):
+            if(distance < min_distance and distance >  0.0001 and node != self):
                 nearest_node = node
                 min_distance = distance
             
@@ -36,9 +37,9 @@ class Node:
     # filter the nodes with in the given radius used for RRT* method
     def find_nodes_with_in_radius(self,nodes,radius):
         nodes_with_in_radius =[]
-        for node in nodes:      
+        for node in nodes :      
             distance = self.get_distance(node)
-            if(distance <= radius):
+            if(distance <= radius and node != self):
               nodes_with_in_radius.append(node)
         return nodes_with_in_radius
     def __str__(self):
@@ -52,32 +53,35 @@ class RRT:
         self.q        = q
         self.p        = p 
         # self.dominion = dominion
-        self.dominion = [-7,7,-7,7]
-        self.max      = max_time 
-        self.vertices =      [ ]
-        self.edges    =      [ ]
-        self.vertices_star = [ ] 
-        self.edges_star    = [ ]
+        self.dominion  = [-7,7,-7,7]
+        self.node_list = {}
+        self.max       = max_time 
+        self.vertices  =    []
+        self.edges     =      [ ]
         self.node_counter  =  1
         self.path          = [ ]
         self.smoothed_path = [ ]
-        self.is_RRT_star = True # by deafault it is False we implement RRT
-        self.radius = 10    # radius for RRT* search  method
-        self.max_time = 10 # max time for the search
+        self.goal_index    = []
+        self.is_RRT_star   = True # by deafault it is False we implement RRT
+        self.radius   = 10    # radius for RRT* search  method
+        self.max_time = 7 # max time for the search
         self.goal_found = False
 
     # Finds th  optimal node parent  with in given radius 
     # used for RRT* Cost Functionality 
     def cost_optimal_parent(self,qnew,current_parent):
+        self.vertices = self.node_list.keys()
         # filter a nodes with a given radius 
         nodes_with_in_radius = qnew.find_nodes_with_in_radius(self.vertices,self.radius)
-        best_cost = current_parent.g_score + qnew.get_distance(current_parent)
+        best_cost = self.node_list[current_parent] + qnew.get_distance(current_parent)
+        # best_cost = current_parent.g_score + qnew.get_distance(current_parent)
         best_parent = current_parent
         if(not nodes_with_in_radius): # return the nearest node
             return best_parent
         else :
             for node in nodes_with_in_radius:
-                new_node_cost = node.g_score + qnew.get_distance(node)
+                new_node_cost = self.node_list[node] + qnew.get_distance(node)
+                # new_node_cost = node.g_score + qnew.get_distance(node)
                 if(new_node_cost < best_cost and self.svc.check_path([[node.x,node.y],[qnew.x , qnew.y]])):
                     best_parent = node
 
@@ -85,15 +89,17 @@ class RRT:
 
     def rewire(self,qnew):
         # filter a nodes with a given radius 
+        self.vertices = self.node_list.keys()
         nodes_with_in_radius = qnew.find_nodes_with_in_radius(self.vertices,self.radius)
         for node in  nodes_with_in_radius:
-            new_node_cost = qnew.g_score + qnew.get_distance(node)      
-        
-            if(new_node_cost < node.g_score and self.svc.check_path([[node.x,node.y],[qnew.x , qnew.y]])):
+            new_node_cost = self.node_list[node] + qnew.get_distance(node)
+              
+            if(new_node_cost < self.node_list[node] and self.svc.check_path([[node.x,node.y],[qnew.x , qnew.y]])):
                 node.parent = qnew
-                node.g_score = new_node_cost
-                node.f_score = node.g_score + node.get_distance(self.goal)
-                self.propagate_cost_to_leaves(node)
+                self.edges.remove((node.parent,node))
+                self.edges.append((qnew,node))
+                self.node_list[node] = new_node_cost
+                # self.propagate_cost_to_leaves(node)
 
     def propagate_cost_to_leaves(self, parent_node):
 
@@ -101,8 +107,7 @@ class RRT:
             if node.parent == parent_node:
                 node.g_score = parent_node.g_score + node.get_distance(parent_node)
                 self.propagate_cost_to_leaves(node)
-    
-    
+
     def Rand_Config(self):       
         
         prob = random.random() # generate a random number between 0 and 1
@@ -116,6 +121,7 @@ class RRT:
 
         return qrand            
     def Near_Vertices(self , qrand):
+        self.vertices = self.node_list.keys()
         qnear =  qrand.find_nearest_node(self.vertices ) # find the nearest node from the vertices
         return qnear
     def New_Config(self , qnear , qrand):
@@ -132,6 +138,8 @@ class RRT:
         return qnew
     
     def reconstract_path(self):
+        self.vertices = self.node_list.keys()
+      
         current = self.goal
         self.path = [current]
         while( current != self.start):
@@ -140,12 +148,53 @@ class RRT:
         path =[(n.x,n.y) for n in self.path]
         self.path.reverse()
         path =[[n.x,n.y] for n in self.path]
+        print("path_length",len(path))
+        print("path",path)
         
         return path
+    def smooth_paths(self): 
+        if len(self.path)!=0:
+            print("Smoothing paths")
+            self.smoothed_path.append(self.path[-1])
+            current_pos=self.path[-1]
+            current_index=self.path.index(current_pos)
+            while (self.path[0] in self.smoothed_path) == False:
+                new_list=self.path[0:current_index]
+                for i in new_list:
+                    if (self.svc.check_path([[i.x , i.y],[current_pos.x  , current_pos.y]])):
+                        self.smoothed_path.append(i)
+                       
+                        current_pos=i
+                        current_index=self.path.index(current_pos)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
+                        break
+        self.smoothed_path=list(reversed(self.smoothed_path))
+        new_path =[(n.x,n.y) for n in  self.smoothed_path]
+        x_path = [n.x for n in self.path]
+        print("x_path",len(x_path))
+        print("new path",len(new_path))
+        return new_path
+        # path = self.path
+        # path.reverse()
+        # first_point =path[0]
+        # next_point = path[1]
+        # new_path = [first_point]
+        # for point in range(1, len(path)):
+        #     np = path[point]
+        #     if self.svc.check_path([[first_point.x , first_point.y], [np.x, np.y]]):
+        #         next_point = path[point]
+        #     else:
+        #         new_path.append(next_point) 
+        #         first_point = next_point 
         
+        # new_path.append(path[-1])
+        # new_path.reverse()
+      
+        # new_path =[(n.x,n.y) for n in new_path]
+        # return new_path
     def smooth_path(self):
+       
         counter = 0
-        max_iterations = 100
+
         self.smoothed_path = [self.goal]
         while True:
             for node in self.path:
@@ -156,16 +205,12 @@ class RRT:
                     break
             if self.smoothed_path[len(self.smoothed_path)-1] == self.start:
                 break
-            counter +=1
-        # incase the max iteration is reached we can't smooth the path return the path 
-
-        # if(counter >= max_iterations):
-        #     print("max iteration reached")
-        #     self.smoothed_path = self.path
-
+            
+        
         self.smoothed_path.reverse()
         path =[(n.x,n.y) for n in self.smoothed_path]
-        
+        print("smoothed_path_length",len(path))
+        print("smoothed_path",path)
         return path
     
     # get the tree of the RRT
@@ -176,49 +221,71 @@ class RRT:
         self.start_time = time.time()
         self.start = Node(start[0],start[1])   
         self.goal =  Node(goal[0],goal[1])
-        self.vertices.append(self.start) # initialize the vertices list 
-        self.start.g_score = 0
-        self.start.f_score = self.start.g_score + self.start.calcu_huristic(self.goal)
+        self.node_list[self.start] = 0
+    
         for k in range(self.k):
             qrand = self.Rand_Config()
             while(not self.svc.is_valid([qrand.x,qrand.y])):
                qrand = self.Rand_Config()
-          
+               
+            # print("random config" , qrand.x , qrand.y)
             qnear = self.Near_Vertices(qrand)
+            # print("nearest config" , qnear.x , qnear.y)
             qnew  = self.New_Config(qnear,qrand)
       
+
             if( self.svc.check_path([[qnear.x ,qnear.y ] ,[qnew.x , qnew.y] ])):    
                 
                 if(self.is_RRT_star == True): # if is RRT star is false we implemet Cost function
                      # We Select new parent with optimal cost
                      qnear = self.cost_optimal_parent(qnew,qnear)
 
-                self.vertices.append(qnew)
-                self.edges.append((qnear,qnew))
-                qnew.parent = qnear 
-                qnew.id = self.node_counter 
-                qnew.g_score = qnear.g_score + qnew.get_distance(qnear)
-                qnew.f_score = qnear.g_score + qnew.calcu_huristic(self.goal)
-                self.node_counter +=1
-                # Implement rewire here
+                new_cost = self.node_list[qnear] + qnew.get_distance(qnear)
+               
+                if qnew not in self.node_list or self.node_list[qnew] > new_cost:
+                    self.node_list[qnew] = new_cost
+                    qnew.parent = qnear
+                    self.edges.append((qnear,qnew))   
+                    self.node_counter += 1     
+          
                 if(self.is_RRT_star == True): # if is RRT star is true we implemet rewire function
                     self.rewire(qnew)
-
+                    pass
                 if(qnew == self.goal):
                     self.goal_found = True
-                    print("goal found")
-
-                    self.reconstract_path()
-                    # self.smoothed_path
-                    return  self.smooth_path() , self.get_tree() 
-        #     if((time.time() - self.start_time) > self.max_time ):
-        #         print("max time reached")
-        #         break
-        #         print("k",k)
-        # if(self.goal_found):
-        #     print("goal found reconstracting path")
-        #     self.reconstract_path()
+                    # print("goal found")      
+            if((time.time() - self.start_time) > self.max_time and not self.goal_found ):
+                self.max_time += 0.5 # give additional time to search
+            elif(self.goal_found and (time.time() - self.start_time) > self.max_time):
+                break # exit the loop if the max time is reache and goal reached d
+            # print("iteration",k)  
+        if(self.goal_found):
+            print("max iteration reached")
+            self.reconstract_path()
             # self.smoothed_path
-            # return  self.smooth_path() , self.get_tree()
+            return self.smooth_paths() , self.get_tree() 
                 
         return [], self.get_tree()
+
+    def search_best_goal_node(self):
+
+        goal_indexes = []
+        for (i, node) in enumerate(self.vertices):
+            if node.get_distance(self.goal) <= self.goal_xy_th:
+                goal_indexes.append(i)
+
+        # angle check
+        # final_goal_indexes = []
+        # for i in goal_indexes:
+        #     if abs(self.vertices[i].yaw - self.goal.yaw) <= self.goal_yaw_th:
+        #         final_goal_indexes.append(i)
+
+        if not goal_indexes:
+            return None
+
+        min_cost = min([self.vertices[i].cost for i in goal_indexes])
+        for i in goal_indexes:
+            if self.vertices[i].g_cost == min_cost:
+                return i
+
+        return None

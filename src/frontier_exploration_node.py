@@ -161,7 +161,7 @@ class FrontierExploration:
         keys = list(distance_cost.keys())
         print("keys",keys)
         if len(keys)==0:
-            return
+            return 
         else:
             # get the frontier with size cost
             size_cost = self.get_clusters_by_size(keys)
@@ -207,7 +207,9 @@ class FrontierExploration:
                     goal.header.stamp = rospy.Time.now()
                     goal.pose.position.x = goal_point[0]
                     goal.pose.position.y = goal_point[1]
+
                     self.publish_selected_frontier(goal_point)
+                    print("goal_point",goal_point)
                     self.move_goal_sub.publish(goal)
                     
                     break
