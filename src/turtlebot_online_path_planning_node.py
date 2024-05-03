@@ -256,7 +256,8 @@ class OnlinePlanner:
         # if self.flag == True:
         #     self.v = 0
         #     self.w = 0
-        
+        self.v = 0
+        self.w = 0
         
         if len(self.path) > 0:
             distance_to_goal = self.distance_to_target(self.path[0])
