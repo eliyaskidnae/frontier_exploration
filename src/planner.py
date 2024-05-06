@@ -1,3 +1,4 @@
+
 #!/usr/bin/python3
 import argparse
 import numpy as np
@@ -14,7 +15,8 @@ from nav_msgs.msg import OccupancyGrid
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Bool
 from std_msgs.msg import Float64MultiArray
-from utils_lib.online_planning import StateValidityChecker, move_to_point, move_to_point_dw , compute_path , wrap_angle ,move_to_point_smooth
+from visualization_msgs.msg import MarkerArray
+from utils_lib.online_planner_dwa import *
 class OnlinePlanner:
     # OnlinePlanner Constructor
     def __init__(self, gridmap_topic, odom_topic, cmd_vel_topic, bounds, distance_threshold ,is_unknown_valid ,is_rrt_star):
@@ -34,7 +36,7 @@ class OnlinePlanner:
         # Dominion [min_x_y, max_x_y] in which the path planner will sample configurations                           
         self.bounds = bounds
         # Tolerance for the distance between the robot and the goal                                        
-        self.tolorance = 0.05
+        self.tolorance = 0.2
         # CONTROLLER PARAMETERS
         # Proportional linear velocity controller gain
         self.Kv = 0.5
@@ -57,6 +59,9 @@ class OnlinePlanner:
         # Publisher for visualizing the path to with rviz
         self.marker_pub = rospy.Publisher('~path_marker', Marker, queue_size=1)
         self.tree_pub = rospy.Publisher('~tree_marker', Marker, queue_size=1)
+        self.traje_pub = rospy.Publisher('~all_traje', MarkerArray, queue_size=1)
+        self.sel_trj = rospy.Publisher('~selected_tra', Marker, queue_size=1)
+
         self.goal_reach = rospy.Publisher('/goal_reached', Bool, queue_size=1)
         # SUBSCRIBERS
         self.gridmap = rospy.Subscriber(gridmap_topic, OccupancyGrid, self.get_gridmap)
@@ -64,7 +69,7 @@ class OnlinePlanner:
 
         self.odom = rospy.Subscriber(odom_topic, Odometry, self.get_odom)
 
-        self.flag = True
+        self.flag = False
         # self.move_goal_sub = None # TODO: subscriber to /move_base_simple/goal plublished by rviz 
         self.move_goal_sub = rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.get_goal, queue_size=1)
         self.cmd = Twist()
@@ -102,7 +107,7 @@ class OnlinePlanner:
                 rospy.logwarn("Start Point is not valid , please try again")
                 self.recovery_behavior() # move around to find a valid point
             else :
-                print("Valid Goal Point !")
+                # print("Valid Goal Point !")
                 msg = Bool()
                 msg = False
                 self.goal_reach.publish(msg)
@@ -123,7 +128,7 @@ class OnlinePlanner:
     def move_back(self):
         start_time = rospy.Time.now()
         duration = 0.7
-        print("move back entered")
+        # print("move back entered")
         while(rospy.Time.now() - start_time).to_sec() < duration:
         
             self.__send_commnd__(-self.v_max , 0)  
@@ -137,22 +142,22 @@ class OnlinePlanner:
             psi_d = math.atan2(pose[1] - self.current_pose[1] , pose[0]- self.current_pose[0])
 
             # print("recovery behavior", psi_d , self.current_pose[2])
-            print(pose ,self.current_pose)
-            print(math.degrees(psi_d) , math.degrees(self.current_pose[2]))
+            # print(pose ,self.current_pose)
+            # print(math.degrees(psi_d) , math.degrees(self.current_pose[2]))
             angle = math.degrees(wrap_angle(psi_d - self.current_pose[2]))
         
             if( -90 < angle < 90):
-                print("move back ward to recover")
+                # print("move back ward to recover")
                 v = -self.v_max
             else:
-                print("move forward to recover")
+                # print("move forward to recover")
                 v = self.v_max
             start_time = rospy.Time.now()
             duration = 2
             while(rospy.Time.now() - start_time).to_sec() < duration:
                 # print("publish")
                 self.__send_commnd__(v,0)  
-            print("recovery behavior done")
+            # print("recovery behavior done")
             self.__send_commnd__(0, 0)
 
     def get_gridmap(self, gridmap):
@@ -208,6 +213,9 @@ class OnlinePlanner:
     # Solve plan from current position to self.goal. 
     def plan(self):
         trial = 0
+        self.v = 0
+        self.w = 0
+
         while trial < 5:
             # Invalidate previous plan if available
             self.path = []
@@ -227,7 +235,8 @@ class OnlinePlanner:
             else : 
                 self.path , self.tree = compute_path(self.current_pose , self.goal , self.svc , self.bounds)
                 # self.draw_tree()
-                print("path_online" , self.path)
+                # print("path_online" , self.path)
+                
 
                 # TODO: If planning fails, consider increasing the planning time, retry the planning a few times, etc.
                 ...
@@ -253,44 +262,60 @@ class OnlinePlanner:
         # next waypoint in the path. It also sends zero velocity commands if there is no active path.
 
     def controller(self, event):
-        # if self.flag == True:
-        #     self.v = 0
-        #     self.w = 0
-        self.v = 0
-        self.w = 0
-        
+        # print("controller")
         if len(self.path) > 0:
             distance_to_goal = self.distance_to_target(self.path[0])
+            # print("distance_to_goal",distance_to_goal )
             
-
             if (distance_to_goal< self.tolorance):
             # TODO: If current waypoint is reached with some tolerance move to the next waypoint. 
                 # print("one way point reached " , self.path[0] , distance_to_goal)
                 del self.path[0]
+                self.v = 0
+                self.w = 0
                 
                 if(len(self.path) == 0 ):
                     rospy.loginfo("Goal Point Reached !")
                     print("Goal Point Reached ! move back a little bit")
-                    self.move_back()
+                    # self.move_back()
                     # self.rotate_to_explore()
                     self.goal = None
                     msg = Bool()    
                     msg = True
                     self.goal_reach.publish(msg)
                     self.retry = 0
-                    self.v = 0
-                    self.w = 0
+                    # self.v = 0
+                    # self.w = 0
+                    self.flag = False
+                   
                    
                 
             else: # TODO: Compute velocities using controller function in utils_lib
               
                 # v , w = move_to_point(self.current_pose, self.path[0], self.Kv , self.Kw )
-                self.v ,self.w = move_to_point_smooth(self.current_pose, self.path[0])
-                # x = [self.current_pose[0] , self.current_pose[1] , self.current_pose[2] , self.v , self.w]
-                # contriol , traj  = move_to_point_dw(x, self.path[0])
-                # self.v = contriol[0]
-                # self.w = contriol[1]
+                # self.v ,self.w = move_to_point_smooth(self.current_pose, self.path[0])
+                curr = self.svc.__position_to_map__(self.current_pose[0:2])
+                # goal = self.svc.__position_to_map__(self.path[0])
+                x = np.array([self.current_pose[0] , self.current_pose[1] ,  self.current_pose[2], self.v, self.w])
+                u , pre_traje , all_traje  = move_dwa(x , self.path[0] , self.svc )
+                print("############################################")
+                print("best_u" , u)
+                print("############################################")
+                # print("pre_traje" , pre_traje)
+                # self.publish_traje(all_traje)
+                # self.sele_tra(pre_traje)
+                
+          
+                # print(u)
+                self.v = u[0]
+                self.w = u[1]
+           
 
+        else:
+            # print("No path to follow")
+            self.v = 0
+            self.w = 0
+            
         # Publish velocity commands 
         self.__send_commnd__(self.v, self.w)
     
@@ -408,6 +433,67 @@ class OnlinePlanner:
                 m.colors.append(color_red)
             
             self.marker_pub.publish(m)
+   
+    def publish_traje(self , trajectories):
+        
+        marker_array = MarkerArray()
+        # print("all trajectories" , trajectories)
+
+        for i, trajectory in enumerate(trajectories):
+            marker = Marker()
+            marker.header.frame_id = "world_ned"
+            marker.type = marker.LINE_STRIP
+            marker.action = marker.ADD
+            marker.id = i
+            marker.pose.orientation.x = 0
+            marker.pose.orientation.y = 0
+            marker.pose.orientation.z = 0
+            marker.pose.orientation.w = 1
+
+            # Setrkerarker properties
+            marker.scale.x = 0.01
+            marker.scale.y = 0.01
+            marker.color = ColorRGBA(1.0, 0.0, 1.0, 1.0)  # Red color
+
+            # Add the trajectory points to the marker
+            for point in trajectory:
+                p = Point()
+                p.x = point[0]
+                p.y = point[1]
+                marker.points.append(p)
+            marker_array.markers.append(marker)
+            self.traje_pub.publish(marker_array)
+
+    def sele_tra(self , trajectory):
+        trajectory = trajectory[:,0:2]
+        # print("selected_trajectory" , trajectory)
+        marker = Marker()
+        marker.header.frame_id = "world_ned"
+        marker.type = marker.LINE_STRIP
+        marker.action = marker.ADD
+        marker.id = 0
+        marker.pose.orientation.x = 0
+        marker.pose.orientation.y = 0
+        marker.pose.orientation.z = 0
+        marker.pose.orientation.w = 1
+        # Set marker properties
+        marker.scale.x = 0.01
+        marker.scale.y = 0.01
+        marker.scale.z = 0.001
+
+
+        marker.color = ColorRGBA(0.0, 1.0, 0.0, 1.0)  # Red color
+        # traj = np.array([[0,0], [0,0], [] )
+        # Add the trajectory points to the marker
+        for point in trajectory:
+            p = Point()
+            p.x = point[0]
+            p.y = point[1]
+            marker.points.append(p)
+
+        
+        self.sel_trj.publish(marker)
+
     def distance_to_target(self , target):
         # print("distance_to_target:", self.current_pose[0] , target[0] , self.current_pose[1] , target[1])
         return   math.sqrt((self.current_pose[0] - target[0])**2 + (self.current_pose[1] - target[1])**2)

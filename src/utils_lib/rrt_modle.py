@@ -254,10 +254,11 @@ class RRT:
                 if(qnew == self.goal):
                     self.goal_found = True
                     # print("goal found")      
-            if((time.time() - self.start_time) > self.max_time and not self.goal_found ):
-                self.max_time += 0.5 # give additional time to search
-            elif(self.goal_found and (time.time() - self.start_time) > self.max_time):
+            
+            if(self.goal_found and (time.time() - self.start_time) > self.max_time):
                 break # exit the loop if the max time is reache and goal reached d
+            elif((time.time() - self.start_time) > self.max_time and not self.goal_found ):
+                self.max_time += 0.5 # give additional time to search
             # print("iteration",k)  
         if(self.goal_found):
             print("max iteration reached")

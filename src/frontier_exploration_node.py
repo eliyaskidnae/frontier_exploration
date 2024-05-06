@@ -148,7 +148,7 @@ class FrontierExploration:
                 centroid = connected_points[median]           
                 x,y = centroid
                 grid = cv2.circle(grid, (int(y),int(x)), 1, (0,0,255),2)
-                cv2.imwrite("frontiercenter.png",grid)
+                # cv2.imwrite("frontiercenter.png",grid)
                 self.clustered_frontier.append([x,y,label])
                 self.publish_clustered_frontiers()
 

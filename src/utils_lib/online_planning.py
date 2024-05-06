@@ -187,7 +187,8 @@ class StateValidityChecker:
 def compute_path(start_p, goal_p, svc, bounds , max_time=7.0):
     # call rrt class to compute the path , which is imported from othe file
     print("computing path---")
-    rrt = RRT_Planner(svc ,2000 ,1, 0.2 , bounds, max_time )
+    # rrt = RRT(svc ,2000 ,1, 0.2 , bounds, max_time )
+    rrt = RRT_Debiun(svc ,2000 ,1, 0.2 , bounds, max_time )
     # returns the smooth path and the tree list
     path  , tree_list = rrt.compute_path(start_p, goal_p )
     # path = rrt.compute_path( start_p , goal_p)
@@ -254,8 +255,8 @@ class Config:
         self.v_min = -0.15  # [m/s]
         # self.w_max = 40.0 * math.pi / 180.0  # [rad/s]
         self.w_max = 0.3  # [rad/s]
-        self.max_lin_accel = 0.8#0.8  # [m/ss]
-        self.max_ang_accel = 20.0 * math.pi / 180.0  # [rad/ss]
+        self.max_lin_accel = 0#0.8  # [m/ss]
+        self.max_ang_accel = 0  # [rad/ss]
         self.v_resolution = 0.01 #0.02  # [m/s]
         self.w_resolution = 0.1 * math.pi / 180.0  # [rad/s]
         self.dt = 0.1  # [s] Time tick for integrate_motion prediction

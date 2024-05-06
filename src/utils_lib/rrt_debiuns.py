@@ -65,7 +65,7 @@ class RRT:
         self.path          = [ ]
         self.smoothed_path = [ ]
         self.goal_index    = []
-        self.is_RRT_star   = True # by deafault it is False we implement RRT
+        self.is_RRT_star   = False # by deafault it is False we implement RRT
         self.radius   = 10    # radius for RRT* search  method
         self.max_time = 7 # max time for the search
         self.goal_found = False
@@ -270,7 +270,7 @@ class RRT:
         return tree_list
     def debiuns_check(self,from_node,to_node):
         yaw = self.wrap_angle(math.atan2(to_node.y - from_node.y, to_node.x - from_node.x))
-        from_yaw = 0
+        from_yaw = yaw
         to_yaw = 0
         if(from_node == self.start):
             from_yaw = self.start.yaw
