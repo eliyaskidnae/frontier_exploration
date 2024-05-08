@@ -33,7 +33,7 @@ class FrontierExploration:
         self.frontier_marker.markers = []
         self.clustered_marker = MarkerArray()
         self.clustered_marker.markers = []
-        self.cluster_dist_the = [0.5,float("inf")]
+        self.cluster_dist_the = [0.8,float("inf")]
         self.svc = StateValidityChecker(  ) 
         # self.frame_id = "odom"
         self.frame_id = "world_ned"
@@ -42,10 +42,7 @@ class FrontierExploration:
         self.frontier_pub = rospy.Publisher('/frontier', MarkerArray, queue_size=2)
         self.cluster_pub = rospy.Publisher('/clustered_frontiers', MarkerArray, queue_size=2)
         self.selec_fr_pub = rospy.Publisher('/selected_frontier', Marker, queue_size=2)
-
-
-
-        
+  
         # SUBSCRIBERS
         rospy.Subscriber('/odom', Odometry, self.get_odom)
         rospy.Subscriber('/goal_reached', Bool, self.get_goal)

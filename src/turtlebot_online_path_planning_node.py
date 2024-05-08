@@ -168,8 +168,9 @@ class OnlinePlanner:
             # print("Map received" , origin , gridmap.info.height , gridmap.info.width)
             # check if the goal and robot current pose is valid
             if(self.svc.is_valid(self.current_pose[0:2])):
-            #  rospy.logwarn("Start Point is not valid , please move around ")
-             self.recovery_behavior() # move around to find a valid point
+               pass
+            #    rospy.logwarn("Start Point is not valid , please move around ")
+               self.recovery_behavior() # move around to find a valid point
             # If the robot is following a path, check if it is still valid
             if(self.goal is not None and not self.svc.is_valid(self.goal)):
                 # rospy.logwarn("Goal Point is not valid , please try again")
@@ -209,6 +210,7 @@ class OnlinePlanner:
     def plan(self):
         trial = 0
         while trial < 5:
+            print("goal" , self.goal)
             # Invalidate previous plan if available
             self.path = []
             # print("Plan_goal"  , self.goal)
@@ -219,7 +221,7 @@ class OnlinePlanner:
                 self.goal_reach.publish(msg)
 
             elif(not self.svc.is_valid(self.current_pose[0:2])):
-                # rospy.logwarn("Start Point is not valid , please move around ")
+                rospy.logwarn("Start Point is not valid , please move around ")
                 self.recovery_behavior()
 
             # print("Compute new path") 
@@ -284,8 +286,8 @@ class OnlinePlanner:
                 
             else: # TODO: Compute velocities using controller function in utils_lib
               
-                # v , w = move_to_point(self.current_pose, self.path[0], self.Kv , self.Kw )
-                self.v ,self.w = move_to_point_smooth(self.current_pose, self.path[0])
+                v , w = move_to_point(self.current_pose, self.path[0], self.Kv , self.Kw )
+                # self.v ,self.w = move_to_point_smooth(self.current_pose, self.path[0])
                 # x = [self.current_pose[0] , self.current_pose[1] , self.current_pose[2] , self.v , self.w]
                 # contriol , traj  = move_to_point_dw(x, self.path[0])
                 # self.v = contriol[0]

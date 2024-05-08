@@ -2,6 +2,7 @@ import numpy as np
 import math
 import random
 from  utils_lib.rrt_modle import RRT
+from utils_lib.rrt_debiuns import RRT as RRT_D
 from utils_lib.rrt_module_debiun import RRT as RRT_Debiun
 from  utils_lib.rrt_star import RRT_Planner
 # from utils_lib.rrt import RRT

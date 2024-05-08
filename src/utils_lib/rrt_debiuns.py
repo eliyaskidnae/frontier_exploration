@@ -56,7 +56,7 @@ class RRT:
         self.q        = q
         self.p        = p 
         # self.dominion = dominion
-        self.dominion  = [-7,7,-7,7]
+        self.dominion  = [-5,5,-5,5]
         self.node_list = {}
         self.max       = max_time 
         self.vertices  =    []
@@ -65,8 +65,8 @@ class RRT:
         self.path          = [ ]
         self.smoothed_path = [ ]
         self.goal_index    = []
-        self.is_RRT_star   = False # by deafault it is False we implement RRT
-        self.radius   = 10    # radius for RRT* search  method
+        self.is_RRT_star   = True # by deafault it is False we implement RRT
+        self.radius   = 5    # radius for RRT* search  method
         self.max_time = 7 # max time for the search
         self.goal_found = False
         self.step_size = 0.1
@@ -81,31 +81,35 @@ class RRT:
         best_cost = self.node_list[current_parent] + qnew.get_distance(current_parent)
         # best_cost = current_parent.g_score + qnew.get_distance(current_parent)
         best_parent = current_parent
+        path = []
         if(not nodes_with_in_radius): # return the nearest node
-            return best_parent
+            return best_parent , []
         else :  
             for node in nodes_with_in_radius:
                 # Get the yaw of the node
                 yaw = self.wrap_angle(math.atan2(qnew.y - node.y, qnew.x - node.x))
                 
-                collision_free = self.svc.check_path([[node.x,node.y],[qnew.x,qnew.y]])
-                # collision_free , dubins_path = self.debiuns_check(node,qnew)
+                # collision_free = self.svc.check_path([[node.x,node.y],[qnew.x,qnew.y]])
+                collision_free , dubins_path = self.debiuns_check(node,qnew)
                 new_node_cost = self.node_list[node] + qnew.get_distance(node)
-                # new_node_cost = node.g_score + qnew.get_distance(node)
+                new_node_cost = self.node_list[node] +len(dubins_path)
+                
                 if(new_node_cost < best_cost and collision_free):
                     best_parent = node
+                    path = dubins_path
                     
 
-            return best_parent
+            return best_parent , path
 
     def rewire(self,qnew):
         # filter a nodes with a given radius 
         self.vertices = self.node_list.keys()
         nodes_with_in_radius = qnew.find_nodes_with_in_radius(self.vertices,self.radius)
         for node in  nodes_with_in_radius:
-            new_node_cost = self.node_list[node] + qnew.get_distance(node)
+            # new_node_cost = self.node_list[node] + qnew.get_distance(node)
+            new_node_cost = self.node_list[node] + len(qnew.debiuns_path)
             collision_free , debiuns_path = self.debiuns_check(qnew,node)
-            collision_free = self.svc.check_path([[qnew.x,qnew.y],[node.x,node.y]])   
+            # collision_free = self.svc.check_path([[qnew.x,qnew.y],[node.x,node.y]])   
             if(new_node_cost < self.node_list[node] and collision_free):
                 node.parent = qnew
                 self.edges.remove((node.parent,node))
@@ -271,21 +275,21 @@ class RRT:
     def debiuns_check(self,from_node,to_node):
         yaw = self.wrap_angle(math.atan2(to_node.y - from_node.y, to_node.x - from_node.x))
         from_yaw = yaw
-        to_yaw = 0
-        if(from_node == self.start):
-            from_yaw = self.start.yaw
-        path_db = dubins.shortest_path((from_node.x ,from_node.y , from_yaw), (to_node.x ,to_node.y , to_yaw), self.debiun_radius)
+        to_yaw = yaw
+        # if(from_node == self.start):
+        #     from_yaw = self.start.yaw
+        path_db = dubins.shortest_path((from_node.x ,from_node.y , from_node.yaw), (to_node.x ,to_node.y , to_yaw), self.debiun_radius)
         waypoints = path_db.sample_many(self.step_size)
-        to_node.yaw = yaw
+      
         debiuns_path = []
         for (ix, iy ,yaw) in (waypoints[0]):
             debiuns_path.append([ix, iy])
-        collision_free = self.svc.check_path(debiuns_path)  
+        collision_free = self.svc.check_path_smooth(debiuns_path)  
 
         # print("collision_free" , collision_free)
 
-
         return collision_free , debiuns_path
+    
     def compute_path(self , start , goal):
         self.start_time = time.time()
         self.start = Node(start[0],start[1] ,start[2])   
@@ -304,15 +308,17 @@ class RRT:
             
 
             collision_free , debiuns_path = self.debiuns_check(qnear,qnew)
-            collision_free = self.svc.check_path([[qnear.x,qnear.y],[qnew.x,qnew.y]])    
 
+            # collision_free = self.svc.check_path([[qnear.x,qnear.y],[qnew.x,qnew.y]])    
+            # print("collision_free" , collision_free)
             if(collision_free ):    
                 
-                if(self.is_RRT_star == True): # if is RRT star is false we implemet Cost function
+                if(True): # if is RRT star is false we implemet Cost function
                      # We Select new parent with optimal cost
-                     qnear = self.cost_optimal_parent(qnew,qnear)
-
-                new_cost = self.node_list[qnear] + qnew.get_distance(qnear)
+                     qnear,path = self.cost_optimal_parent(qnew,qnear)
+                     if(path):
+                         debiuns_path = path
+                new_cost = self.node_list[qnear] + len(debiuns_path)
                
                 if qnew not in self.node_list or self.node_list[qnew] > new_cost:
                     self.node_list[qnew] = new_cost
@@ -322,12 +328,12 @@ class RRT:
                     self.edges.append((qnear,qnew))   
                     self.node_counter += 1     
           
-                if(False and self.is_RRT_star == True): # if is RRT star is true we implemet rewire function
+                if( self.is_RRT_star == True): # if is RRT star is true we implemet rewire function
                     self.rewire(qnew)
                     pass
                 if(qnew == self.goal):
                     self.goal_found = True
-                    # print("goal found")      
+                    print("goal found")      
             if((time.time() - self.start_time) > self.max_time and not self.goal_found ):
                 self.max_time += 0.5 # give additional time to search
             elif(self.goal_found and (time.time() - self.start_time) > self.max_time):
@@ -335,12 +341,12 @@ class RRT:
             print("iteration",k)  
         if(self.goal_found):
             print("max iteration reached")
-            self.reconstract_path()
+            # self.reconstract_path()
             # self.reconstract_db_path()
             # self.smooth_path()    
             # self.smoothed_path
             # return self.debiuns_path, self.get_tree() 
-            return self.smooth_paths(), self.get_tree()
+            return self.reconstract_db_path(), self.get_tree()
                 
         return [], self.get_tree()
 

@@ -2,6 +2,7 @@ import numpy as np
 import math
 import random
 from  utils_lib.rrt_modle import RRT
+from  utils_lib.rrt_debiuns import RRT as RRT_DB
 from utils_lib.rrt_module_debiun import RRT as RRT_Debiun
 from  utils_lib.rrt_star import RRT_Planner
 # from utils_lib.rrt import RRT
@@ -118,6 +119,17 @@ class StateValidityChecker:
         return None
 
     # Given a path, returs true if the path is not in collision and false othewise.
+    
+    def check_path_smooth(self,paths):
+        for path in paths:
+            if(not self.is_valid(path)):
+
+                return False
+        
+        return True
+    
+    
+    
     def check_path(self, path):
         step_size = 0.2*self.distance
         valid = True
@@ -188,7 +200,7 @@ def compute_path(start_p, goal_p, svc, bounds , max_time=7.0):
     # call rrt class to compute the path , which is imported from othe file
     print("computing path---")
     # rrt = RRT(svc ,2000 ,1, 0.2 , bounds, max_time )
-    rrt = RRT_Debiun(svc ,2000 ,1, 0.2 , bounds, max_time )
+    rrt = RRT_DB(svc ,1000    ,0.6, 0.2 , bounds, max_time )
     # returns the smooth path and the tree list
     path  , tree_list = rrt.compute_path(start_p, goal_p )
     # path = rrt.compute_path( start_p , goal_p)

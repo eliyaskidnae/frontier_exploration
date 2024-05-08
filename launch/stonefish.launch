@@ -2,16 +2,11 @@
     <param name="~frame_id" type="string" value="world_ned" />
     <!-- <include file="$(find turtlebot_simulation)/launch/kobuki_motion_planning_nogpu.launch" />  -->
     <include file="$(find turtlebot_simulation)/launch/kobuki_motion_planning.launch" />
-    <!-- <include file="$(find pose_based_graph_slam_icp)/launch/turtlebot_basic.launch" /> -->
-    <!-- <include file="$(find pose_based_graph_slam_icp)/launch/turtlebot_integration.launch" /> -->
+    <!-- <include file="$(find turtlebot_simulation)/launch/turtlebot_integration.launch" /> -->
     
-    <!-- <node pkg="turtlebot_online_path_planning" type="laser_scan_to_point_cloud_node.py" name="laserscan_to_pointcloud"/> -->
-    <!-- <node pkg="octomap_server" type="octomap_server_node" name="octomap" output="screen"/> -->
-    <!-- <node pkg="rviz" type="rviz" name="rviz" args="-d $(find localization_lab)/config/finalOdom.rviz"/> -->
     <node pkg="frontier_exploration" type="laser_scan_to_point_cloud_node.py" name="laserscan_to_pointcloud"/>
-    <!-- <node pkg="localization_lab" type="odom.py" name="odom" output="screen"/>  -->
+    <node pkg="frontier_exploration" type="odom.py" name="odom" output="screen"/> 
     <node pkg="octomap_server" type="octomap_server_node" name="octomap" output="screen"/>
-    <!-- <include file="$(find turtlebot_control)/launch/teleop_and_odom.launch" /> -->
     <arg name="is_rrt_star" default="False" />
     <arg name="is_unknown_valid" default="True" />
     <!-- <node name="planning" pkg="frontier_exploration" type="turtlebot_online_path_planning_node.py" output="screen">
@@ -20,6 +15,4 @@
     </node> -->
     <!-- <node name="exploration" pkg="frontier_exploration" type="frontier_exploration_node.py" output="screen">
     </node> -->
-
-
 </launch>

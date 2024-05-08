@@ -66,7 +66,7 @@ class RRT:
         self.smoothed_path = [ ]
         self.goal_index    = []
         self.is_RRT_star   = True # by deafault it is False we implement RRT
-        self.radius   = 10    # radius for RRT* search  method
+        self.radius   = 5    # radius for RRT* search  method
         self.max_time = 7 # max time for the search
         self.goal_found = False
         self.step_size = 0.1
