@@ -135,7 +135,7 @@ class FrontierExploration:
             return self.frontier_map , self.frontier_list
                     
 
-    ############# TODO
+    ############# Updated
     def set_frontier_map(self):
         ''' this function set the frontier map by considering the free space as frontier 
             if one of its neighbour is unknown or out of map'''
