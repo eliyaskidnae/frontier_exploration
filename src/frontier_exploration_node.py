@@ -1,9 +1,15 @@
 #!/usr/bin/python3
+
 from spatialmath import Quaternion
+from scipy.signal import convolve2d
+from cv_bridge import CvBridge
+from sensor_msgs.msg import Image
+
 import rospy
 import numpy as np
 from nav_msgs.msg import OccupancyGrid
-from std_msgs.msg import String
+from std_msgs.msg import String 
+
 # from utils_lib.online_planning import StateValidityChecker
 from utils_lib.online_planning import StateValidityChecker, move_to_point, compute_path , wrap_angle
 from visualization_msgs.msg import Marker
@@ -33,19 +39,22 @@ class FrontierExploration:
         self.frontier_marker.markers = []
         self.clustered_marker = MarkerArray()
         self.clustered_marker.markers = []
-        self.cluster_dist_the = [0.5,float("inf")]
+        self.cluster_dist_the = [0.8,float("inf")]
         self.svc = StateValidityChecker(  ) 
+        
+        self.bridge = CvBridge()
+        
         # self.frame_id = "odom"
         self.frame_id = "world_ned"
+        
+        self.frontier_map_pub = rospy.Publisher('/New_frontier_map', Image, queue_size=1)
+        
         # self.frontier_exploration_pub = rospy.Publisher('/frontier_exploration', String, queue_size=10)
         # self.frontier_exploration_sub = rospy.Subscriber('/frontier_exploration', String, self.frontier_exploration_callback)
         self.frontier_pub = rospy.Publisher('/frontier', MarkerArray, queue_size=2)
         self.cluster_pub = rospy.Publisher('/clustered_frontiers', MarkerArray, queue_size=2)
         self.selec_fr_pub = rospy.Publisher('/selected_frontier', Marker, queue_size=2)
-
-
-
-        
+  
         # SUBSCRIBERS
         rospy.Subscriber('/odom', Odometry, self.get_odom)
         rospy.Subscriber('/goal_reached', Bool, self.get_goal)
@@ -56,11 +65,15 @@ class FrontierExploration:
         self.robot_radius = 0.2
         self.goal_reached = True
         self.current_pose = None
+        self.kernel = [[1, 1, 1], 
+                        [1, 0, 1], 
+                        [1, 1, 1]] # Convolution kernel for frontier detection
+
         
     
     def get_goal(self, goal):
         ''' this function is called when the goal is reached'''
-        print('Goal reached:',goal)
+        print('Goal reached:',goal.data)
         if goal.data == True:
             self.goal_reached=True
         
@@ -97,27 +110,60 @@ class FrontierExploration:
                     self.goal_reached = False
                     self.candidate_frontier()
             
-    def set_frontier_map(self):
 
+    def set_frontier_mapp(self):
+            return
+
+            ''' this function set the frontier map by considering the free space as frontier 
+                if one of its neighbour is unknown or out of map'''
+            
+            direction = [[0, 1], [1, 0], [0, -1], [-1, 0]]
+            free_space = np.where(self.grid_map == 0)
+            free_space = list(zip(free_space[0], free_space[1]))
+            
+            # loop over all free space 
+            for f in free_space:
+                for d in direction:
+                    # consider a free space as frontier if one of its neighbour is unknown or out of map
+                    niebour = [f[0]+d[0],f[1]+d[1]]
+                    if not self.svc.is_onmap(niebour) or self.grid_map[niebour[0],niebour[1]] == -1 :
+                        self.frontier_map[f[0]][f[1]] = 255
+                        self.frontier_list.append(f)
+                        break
+        
+            self.publish_frontiers()
+            return self.frontier_map , self.frontier_list
+                    
+
+    ############# TODO
+    def set_frontier_map(self):
         ''' this function set the frontier map by considering the free space as frontier 
             if one of its neighbour is unknown or out of map'''
         
-        direction = [[0, 1], [1, 0], [0, -1], [-1, 0]]
-        free_space = np.where(self.grid_map == 0)
-        free_space = list(zip(free_space[0], free_space[1]))
+        # Convolution kernel
         
-        # loop over all free space 
-        for f in free_space:
-            for d in direction:
-                # consider a free space as frontier if one of its neighbour is unknown or out of map
-                niebour = [f[0]+d[0],f[1]+d[1]]
-                if not self.svc.is_onmap(niebour) or self.grid_map[niebour[0],niebour[1]] == -1 :
-                    self.frontier_map[f[0]][f[1]] = 255
-                    self.frontier_list.append(f)
-                    break
-       
+        
+        # Perform the convolution operation
+        conv_result = convolve2d(self.grid_map == -1, self.kernel, mode='same') 
+
+        # Set the frontier map and list
+        self.frontier_map = np.where((self.grid_map == 0) & (conv_result > 0), 255, 0)
+        self.frontier_list = np.argwhere(self.frontier_map == 255)
+        self.frontier_map = self.frontier_map.astype(np.uint8)
+
         self.publish_frontiers()
+        # Convert the frontier map to an image message
+        frontier_map_msg = self.bridge.cv2_to_imgmsg(self.frontier_map, encoding="mono8")
+        # Publish the image message
+        self.frontier_map_pub.publish(frontier_map_msg)
+        
         return self.frontier_map , self.frontier_list
+    
+    
+    
+    
+    
+             
              
     def cluster_frontier(self):
         ''' this function clusters the frontier to get the candidate frontiers'''
@@ -153,6 +199,7 @@ class FrontierExploration:
                 self.publish_clustered_frontiers()
 
         return  self.clustered_frontier
+    
     
     def candidate_frontier(self):
         ''' this function selects the candidate frontier to explore'''
@@ -321,6 +368,7 @@ class FrontierExploration:
         ''' this function filters the frontier clusters with higher information gain'''
 
         pass
+    
     def get_odom(self, odom):
         # print("get_odom")
         _, _, yaw = tf.transformations.euler_from_quaternion([odom.pose.pose.orientation.x, 
@@ -330,6 +378,7 @@ class FrontierExploration:
         # print ("current_pose",self.current_pose)
         # TODO: Store current position (x, y, yaw) as a np.array in self.current_pose var.
         self.current_pose = np.array([odom.pose.pose.position.x, odom.pose.pose.position.y, yaw])
+        
         # print ("current_pose",self.current_pose)
     def publish_clustered_frontiers(self):
             
