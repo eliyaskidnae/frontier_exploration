@@ -172,3 +172,7 @@ def dynamic_window_approach(self, goal, v_max, w_max, dv_resolution, dw_resoluti
           #best_v, best_w = 0, 0
 
           return best_v, best_w
+      
+      
+      
+      

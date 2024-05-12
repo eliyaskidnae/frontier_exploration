@@ -2,6 +2,7 @@ import numpy as np
 import math
 import random
 from  utils_lib.rrt_modle import RRT
+from  utils_lib.rrt_debiuns import RRT as RRT_DB
 from utils_lib.rrt_module_debiun import RRT as RRT_Debiun
 from  utils_lib.rrt_star import RRT_Planner
 # from utils_lib.rrt import RRT
@@ -96,6 +97,7 @@ class StateValidityChecker:
                     min_dis = min(min_dis, distance)
         
         return   min_dis
+    
     def not_valid_pose(self, pose): 
         # returns pose that are not valid
         m = self.__position_to_map__(pose)
@@ -116,8 +118,20 @@ class StateValidityChecker:
                     if(not self.is_unknown_valid):
                         return pose
         return None
+    
 
     # Given a path, returs true if the path is not in collision and false othewise.
+    
+    def check_path_smooth(self,paths):
+        for path in paths:
+            if(not self.is_valid(path)):
+
+                return False
+        
+        return True
+    
+    
+    
     def check_path(self, path):
         step_size = 0.2*self.distance
         valid = True
@@ -188,7 +202,7 @@ def compute_path(start_p, goal_p, svc, bounds , max_time=7.0):
     # call rrt class to compute the path , which is imported from othe file
     print("computing path---")
     # rrt = RRT(svc ,2000 ,1, 0.2 , bounds, max_time )
-    rrt = RRT_Debiun(svc ,2000 ,1, 0.2 , bounds, max_time )
+    rrt = RRT_DB(svc ,1000    ,0.6, 0.2 , bounds, max_time )
     # returns the smooth path and the tree list
     path  , tree_list = rrt.compute_path(start_p, goal_p )
     # path = rrt.compute_path( start_p , goal_p)
@@ -205,6 +219,8 @@ def move_to_point(current, goal, Kv=0.5, Kw=0.5):
     v = 0.0 if abs(psi) > 0.05 else Kv * d
     w = Kw * psi
     return v, w
+
+
 def move_to_point_smooth(current, goal, Kp=10, Ki=10, Kd=10, dt=0.05):
     # Compute distance and angle to goal
    
@@ -222,9 +238,7 @@ def move_to_point_smooth(current, goal, Kp=10, Ki=10, Kd=10, dt=0.05):
         move_to_point_smooth.prev_error_dist = error_dist
     if 'prev_error_angle' not in move_to_point_smooth.__dict__:
         move_to_point_smooth.prev_error_angle = error_angle
-
     # Compute PID terms
-    
     error_dist_deriv = (error_dist - move_to_point_smooth.prev_error_dist)
     error_angle_deriv = (error_angle - move_to_point_smooth.prev_error_angle)
     error_dist_integral = (error_dist + move_to_point_smooth.prev_error_dist)
@@ -242,6 +256,8 @@ def move_to_point_smooth(current, goal, Kp=10, Ki=10, Kd=10, dt=0.05):
         v = 0
     
     return v, w
+
+
 
 
 class Config:
@@ -604,23 +620,7 @@ def calc_heading_cost(trajectory, goal):
 config = Config()
 
 def move_to_point_dw(x, goal):
-    """
-    summary: this function calculates the control input and trajectory based on the dynamic window
-
-    :param x: current state [x(m), y(m), yaw(rad), v(m/s), w(rad/s)]
-    :type x: list or numpy.array
-    :param config: configuration parameters
-    :type config: class
-    :param goal: goal position [x(m), y(m)]
-    :type goal: list or numpy.array
-    :param obstacles: obstacle positions [x(m) y(m), ....]
-    :type obstacles: list of lists or numpy.array
-
-    :return: control input
-    :rtype: list
-    :return: trajectory
-    :rtype: numpy.array
-    """
+    
     global config, local_map
     # print("goal", goal)
 

@@ -259,7 +259,7 @@ class RRT:
                 break # exit the loop if the max time is reache and goal reached d
             elif((time.time() - self.start_time) > self.max_time and not self.goal_found ):
                 self.max_time += 0.5 # give additional time to search
-            # print("iteration",k)  
+            print("iteration",k)  
         if(self.goal_found):
             print("max iteration reached")
             self.reconstract_path()

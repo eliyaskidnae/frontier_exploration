@@ -302,10 +302,9 @@ class OnlinePlanner:
                 print("best_u" , u)
                 print("############################################")
                 # print("pre_traje" , pre_traje)
-                # self.publish_traje(all_traje)
-                # self.sele_tra(pre_traje)
-                
-          
+                self.publish_traje(all_traje)
+                self.sele_tra(pre_traje)
+            
                 # print(u)
                 self.v = u[0]
                 self.w = u[1]

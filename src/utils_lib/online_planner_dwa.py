@@ -210,8 +210,6 @@ def move_to_point(current, goal, Kv=0.5, Kw=0.5):
 
 
 
-
-
 def move_to_point_smooth(current, goal, Kp=10, Ki=10, Kd=10, dt=0.05):
     # Compute distance and angle to goal
    

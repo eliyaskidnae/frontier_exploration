@@ -95,7 +95,6 @@ class RRT:
                 if(new_node_cost < best_cost and collision_free):
                     best_parent = node
                     
-
             return best_parent
 
     def rewire(self,qnew):
@@ -287,6 +286,7 @@ class RRT:
 
         return collision_free , debiuns_path
     def compute_path(self , start , goal):
+        
         self.start_time = time.time()
         self.start = Node(start[0],start[1] ,start[2])   
         self.goal =  Node(goal[0],goal[1])
