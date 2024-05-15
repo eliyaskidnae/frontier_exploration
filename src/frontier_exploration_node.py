@@ -174,7 +174,7 @@ class FrontierExploration:
                 size = size_cost[key]
                 density = density_cost[key]
                 orientation = orientation_cost[key]
-                cost = 0.4*distance - 0.3*size - 0.1*density + 0.0*orientation
+                cost = 0.5*distance - 0.3*size - 0.1*density + 0.0*orientation
                 
 
                 cluster_cost[key] = cost

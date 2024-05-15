@@ -17,6 +17,7 @@ class Node:
         self.f_score = float('inf') # initialize as inifinity 
         self.g_score = float('inf') # initialize as inifinity 
         self.parent  = None
+        
     # calculate the huristic value of the node
     def calcu_huristic(self,target):
         distance = sqrt( (self.x-target.x)**2 + (self.y-target.y)**2 )
@@ -158,6 +159,7 @@ class RRT:
         
 
         self.debiuns_path = []
+        self.path = []
         node = self.goal
          
         while node.parent:
@@ -165,13 +167,22 @@ class RRT:
 # 
             for p in (reversed(node.debiuns_path)):
                 self.debiuns_path.append(p)
-                # print("path" , path)
+
+
+            self.path.append((node.x, node.y))
+            print("waypoints" , node.x, node.y)
      
             node = node.parent
-            
+
+
+        self.path.append((self.start.x,self.start.y)) #finally add start point 
+        self.path.reverse()
+
+        print("final_path" , self.path)
+
         self.debiuns_path.reverse()
         #
-        print("final_path" , self.debiuns_path)
+        # print("final_path" , self.debiuns_path)
         
         return self.debiuns_path
         
@@ -340,7 +351,7 @@ class RRT:
             # self.smooth_path()    
             # self.smoothed_path
             # return self.debiuns_path, self.get_tree() 
-            return self.smooth_paths(), self.get_tree()
+            return self.smooth_paths(), self.path
                 
         return [], self.get_tree()
 

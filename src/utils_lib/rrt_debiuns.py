@@ -66,7 +66,7 @@ class RRT:
         self.smoothed_path = [ ]
         self.goal_index    = []
         self.is_RRT_star   = True # by deafault it is False we implement RRT
-        self.radius   = 5    # radius for RRT* search  method
+        self.radius   = 2.5    # radius for RRT* search  method
         self.max_time = 7 # max time for the search
         self.goal_found = False
         self.step_size = 0.1
@@ -162,6 +162,7 @@ class RRT:
         
 
         self.debiuns_path = []
+        self.path = []
         node = self.goal
          
         while node.parent:
@@ -169,13 +170,22 @@ class RRT:
 # 
             for p in (reversed(node.debiuns_path)):
                 self.debiuns_path.append(p)
-                # print("path" , path)
+
+
+            self.path.append((node.x, node.y))
+            print("waypoints" , node.x, node.y)
      
             node = node.parent
-            
+
+
+        self.path.append((self.start.x,self.start.y)) #finally add start point 
+        self.path.reverse()
+
+        print("final_path" , self.path)
+
         self.debiuns_path.reverse()
         #
-        print("final_path" , self.debiuns_path)
+        # print("final_path" , self.debiuns_path)
         
         return self.debiuns_path
         
@@ -274,11 +284,18 @@ class RRT:
         return tree_list
     def debiuns_check(self,from_node,to_node):
         yaw = self.wrap_angle(math.atan2(to_node.y - from_node.y, to_node.x - from_node.x))
-        from_yaw = yaw
+   
         to_yaw = yaw
         # if(from_node == self.start):
         #     from_yaw = self.start.yaw
-        path_db = dubins.shortest_path((from_node.x ,from_node.y , from_node.yaw), (to_node.x ,to_node.y , to_yaw), self.debiun_radius)
+        #calculate the distance between to_node and from_node
+        check_distance = to_node.get_distance(from_node)
+        # check_angel = from_node.yaw - to_yaw
+        if check_distance < 0.4:
+            path_db = dubins.shortest_path((from_node.x ,from_node.y , to_yaw), (to_node.x ,to_node.y , to_yaw), self.debiun_radius)
+            # print("Stright ##########################################################################")
+        else: 
+            path_db = dubins.shortest_path((from_node.x ,from_node.y , from_node.yaw), (to_node.x ,to_node.y , to_yaw), self.debiun_radius)
         waypoints = path_db.sample_many(self.step_size)
       
         debiuns_path = []
@@ -292,8 +309,10 @@ class RRT:
     
     def compute_path(self , start , goal):
         self.start_time = time.time()
+
         self.start = Node(start[0],start[1] ,start[2])   
         self.goal =  Node(goal[0],goal[1])
+
         self.node_list[self.start] = 0
     
         for k in range(self.k):
@@ -346,7 +365,7 @@ class RRT:
             # self.smooth_path()    
             # self.smoothed_path
             # return self.debiuns_path, self.get_tree() 
-            return self.reconstract_db_path(), self.get_tree()
+            return self.reconstract_db_path(), self.path
                 
         return [], self.get_tree()
 

@@ -9,8 +9,10 @@ Panels:
         - /Odometry1/Shape1
         - /Odometry1/Covariance1
         - /Odometry2/Covariance1/Position1
+        - /Marker1
+        - /MarkerArray3
       Splitter Ratio: 0.5164557099342346
-    Tree Height: 864
+    Tree Height: 1189
   - Class: rviz/Selection
     Name: Selection
   - Class: rviz/Tool Properties
@@ -63,18 +65,120 @@ Visualization Manager:
     - Alpha: 1
       Class: rviz/RobotModel
       Collision Enabled: false
-      Enabled: false
+      Enabled: true
       Links:
         All Links Enabled: true
         Expand Joint Details: false
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
+        camera_accel_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_accel_optical_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_bottom_screw_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_color_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_color_optical_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_depth_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_depth_optical_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_gyro_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_gyro_optical_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_infra1_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_infra1_optical_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_infra2_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_infra2_optical_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        turtlebot/base_footprint:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        turtlebot/base_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        turtlebot/cliff_sensor_front_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        turtlebot/cliff_sensor_left_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        turtlebot/cliff_sensor_right_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        turtlebot/imu:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        turtlebot/plates_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        turtlebot/rplidar:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        turtlebot/wheel_left_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        turtlebot/wheel_right_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
       Name: RobotModel
       Robot Description: robot_description
       TF Prefix: ""
       Update Interval: 0
-      Value: false
+      Value: true
       Visual Enabled: true
     - Class: rviz/TF
       Enabled: false
@@ -108,6 +212,7 @@ Visualization Manager:
         Grid: true
         LaserScan: true
         Map: true
+        Marker: true
         MarkerArray: true
         Odometry: true
         PointCloud2: true
@@ -268,6 +373,46 @@ Visualization Manager:
       Unreliable: false
       Use Timestamp: false
       Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /turtlebot_online_path_planning_node/path_marker_rrt
+      Name: Marker
+      Namespaces:
+        path: true
+      Queue Size: 100
+      Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /turtlebot_online_path_planning_node/path_marker
+      Name: Marker
+      Namespaces:
+        path: true
+      Queue Size: 100
+      Value: true
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /frontier
+      Name: MarkerArray
+      Namespaces:
+        "": true
+      Queue Size: 100
+      Value: true
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /clustered_frontiers
+      Name: MarkerArray
+      Namespaces:
+        "": true
+      Queue Size: 100
+      Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /selected_frontier
+      Name: Marker
+      Namespaces:
+        {}
+      Queue Size: 100
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 85; 87; 83
@@ -313,10 +458,10 @@ Visualization Manager:
 Window Geometry:
   Displays:
     collapsed: false
-  Height: 1472
+  Height: 1872
   Hide Left Dock: false
   Hide Right Dock: false
-  QMainWindow State: 000000ff00000000fd0000000400000000000001f7000004bafc020000000dfb0000001200530065006c0065006300740069006f006e00000001e10000009b000000b000fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000b0fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000006e000003ce0000018200fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb0000001e005200650061006c00730065006e0073006500200043006f006c006f0072000000021f000001780000000000000000fb0000001e005200650061006c00730065006e007300650020004400650070007400680000000281000001160000000000000000fb0000000c00540065006c0065006f00700000000389000000b40000008000fffffffb0000000c00540065006c0065006f0070000000041e0000010a0000008000fffffffb0000001e005200650061006c00730065006e0073006500200043006f006c006f00720100000448000000e00000002600ffffff000000010000015f000004bafc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073010000006e000004ba0000013200fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e1000001970000000300000a000000005efc0100000002fb0000000800540069006d0065010000000000000a00000006dc00fffffffb0000000800540069006d0065010000000000000450000000000000000000000692000004ba00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000400000000000002d00000064afc020000000dfb0000001200530065006c0065006300740069006f006e00000001e10000009b000000b000fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000b0fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000006e000005130000018200fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb0000001e005200650061006c00730065006e0073006500200043006f006c006f0072000000021f000001780000000000000000fb0000001e005200650061006c00730065006e007300650020004400650070007400680000000281000001160000000000000000fb0000000c00540065006c0065006f00700000000389000000b40000008000fffffffb0000000c00540065006c0065006f0070000000041e0000010a0000008000fffffffb0000001e005200650061006c00730065006e0073006500200043006f006c006f0072010000058d0000012b0000002600ffffff000000010000015f0000064afc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073010000006e0000064a0000013200fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e1000001970000000300000bf00000005efc0100000002fb0000000800540069006d0065010000000000000bf0000006dc00fffffffb0000000800540069006d00650100000000000004500000000000000000000007a90000064a00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Realsense Color:
     collapsed: false
   Selection:
@@ -329,6 +474,6 @@ Window Geometry:
     collapsed: false
   Views:
     collapsed: false
-  Width: 2560
-  X: 0
+  Width: 3056
+  X: 144
   Y: 54

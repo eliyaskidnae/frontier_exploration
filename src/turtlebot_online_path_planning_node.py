@@ -14,7 +14,7 @@ from nav_msgs.msg import OccupancyGrid
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Bool
 from std_msgs.msg import Float64MultiArray
-from utils_lib.online_planning import StateValidityChecker, move_to_point, move_to_point_dw , compute_path , wrap_angle ,move_to_point_smooth
+from utils_lib.online_planning import StateValidityChecker, move_to_point , compute_path , wrap_angle ,move_to_point_smooth
 class OnlinePlanner:
     # OnlinePlanner Constructor
     def __init__(self, gridmap_topic, odom_topic, cmd_vel_topic, bounds, distance_threshold ,is_unknown_valid ,is_rrt_star):
@@ -56,6 +56,7 @@ class OnlinePlanner:
         self.cmd_pub = rospy.Publisher('/turtlebot/kobuki/commands/wheel_velocities', Float64MultiArray, queue_size=1)
         # Publisher for visualizing the path to with rviz
         self.marker_pub = rospy.Publisher('~path_marker', Marker, queue_size=1)
+        self.marker_pub2 = rospy.Publisher('~path_marker_rrt', Marker, queue_size=1)
         self.tree_pub = rospy.Publisher('~tree_marker', Marker, queue_size=1)
         self.goal_reach = rospy.Publisher('/goal_reached', Bool, queue_size=1)
         # SUBSCRIBERS
@@ -122,14 +123,12 @@ class OnlinePlanner:
         self.__send_commnd__(0, 0)
     def move_back(self):
         start_time = rospy.Time.now()
-        duration = 0.7
+        duration = 1
         print("move back entered")
         while(rospy.Time.now() - start_time).to_sec() < duration:
         
             self.__send_commnd__(-self.v_max , 0)  
         self.__send_commnd__(0, 0)
-
-
     def recovery_behavior(self):
         pose = self.svc.not_valid_pose(self.current_pose[0:2])
         if pose is not None:
@@ -154,7 +153,6 @@ class OnlinePlanner:
                 self.__send_commnd__(v,0)  
             print("recovery behavior done")
             self.__send_commnd__(0, 0)
-
     def get_gridmap(self, gridmap):
        
         # To avoid map update too often (change value '1' if necessary)
@@ -205,7 +203,6 @@ class OnlinePlanner:
             #         rospy.loginfo("Retry Planning ")
             #         self.plan()
                 
-
     # Solve plan from current position to self.goal. 
     def plan(self):
         trial = 0
@@ -244,6 +241,7 @@ class OnlinePlanner:
                     self.retry = 0 # reset retry counter
                     # Publish plan marker to visualize in rviz
                     self.publish_path()
+                    self.publish_path_new(self.tree)
                     # remove initial waypoint in the path (current pose is already reached)
                     if self.path[0]:
                         del self.path[0]                   
@@ -260,20 +258,43 @@ class OnlinePlanner:
         #     self.w = 0
         self.v = 0
         self.w = 0
+        #calculate nearst distance
         
-        if len(self.path) > 0:
-            distance_to_goal = self.distance_to_target(self.path[0])
             
-
+        p_skip = 7
+        if len(self.path) > 0:
+            p_near = self.path[0]
+            min_distance = self.distance_to_target(self.path[0])
+            for point in self.path[:p_skip+1]:
+                distance = self.distance_to_target(point)
+                if distance < min_distance:
+                    p_near = point
+                    min_distance = distance
+            if len(self.path) < p_skip+1:
+                distance_to_goal = self.distance_to_target(self.path[-1])
+                count = len(self.path)+1
+            else:
+                distance_to_goal = self.distance_to_target(self.path[p_skip])
+                count = p_skip+1
+            
             if (distance_to_goal< self.tolorance):
             # TODO: If current waypoint is reached with some tolerance move to the next waypoint. 
                 # print("one way point reached " , self.path[0] , distance_to_goal)
-                del self.path[0]
+                del self.path[:count]
                 
                 if(len(self.path) == 0 ):
                     rospy.loginfo("Goal Point Reached !")
-                    print("Goal Point Reached ! move back a little bit")
-                    self.move_back()
+                    x = self.current_pose[0]
+                    y = self.current_pose[1]
+                    angle = self.current_pose[2]
+                    distance = 0.4
+                    # Calculate the next goal position
+                    goal_x = x + distance * math.cos(angle)
+                    goal_y = y + distance * math.sin(angle)
+                    if not self.svc.is_valid((goal_x, goal_y)):
+                        self.move_back()
+                        print("Goal Point Reached ! move back a little bit")
+
                     # self.rotate_to_explore()
                     self.goal = None
                     msg = Bool()    
@@ -286,8 +307,12 @@ class OnlinePlanner:
                 
             else: # TODO: Compute velocities using controller function in utils_lib
               
-                v , w = move_to_point(self.current_pose, self.path[0], self.Kv , self.Kw )
-                # self.v ,self.w = move_to_point_smooth(self.current_pose, self.path[0])
+                if len(self.path) < count:
+                    self.v, self.w = move_to_point_smooth(self.current_pose, self.path[-1], p_near)
+
+                # v , w = move_to_point(self.current_pose, self.path[0], self.Kv , self.Kw )
+                else:
+                    self.v, self.w = move_to_point_smooth(self.current_pose, self.path[p_skip], p_near)
                 # x = [self.current_pose[0] , self.current_pose[1] , self.current_pose[2] , self.v , self.w]
                 # contriol , traj  = move_to_point_dw(x, self.path[0])
                 # self.v = contriol[0]
@@ -410,6 +435,57 @@ class OnlinePlanner:
                 m.colors.append(color_red)
             
             self.marker_pub.publish(m)
+    def publish_path_new(self , path_rrt):
+        path = path_rrt
+        if len(self.path) > 1:
+            # print("Publish path!")
+            m = Marker()
+            m.header.frame_id = 'world_ned'
+            m.header.stamp = rospy.Time.now()
+            m.id = 2
+            m.type = Marker.LINE_STRIP
+            m.ns = 'path'
+            m.action = Marker.DELETE
+            m.lifetime = rospy.Duration(0)
+            self.marker_pub2.publish(m)
+
+            m.action = Marker.ADD
+            m.scale.x = 0.04
+            m.scale.y = 0.0
+            m.scale.z = 0.0
+            
+            m.pose.orientation.x = 0
+            m.pose.orientation.y = 0
+            m.pose.orientation.z = 0
+            m.pose.orientation.w = 1
+            
+            color_red = ColorRGBA()
+            color_red.r = 1
+            color_red.g = 1
+            color_red.b = 0
+            color_red.a = 1
+            color_blue = ColorRGBA()
+            color_blue.r = 0
+            color_blue.g = 0
+            color_blue.b = 1
+            color_blue.a = 1
+
+            p = Point()
+            p.x = self.current_pose[0]
+            p.y = self.current_pose[1]
+            p.z = 0.0
+            m.points.append(p)
+            m.colors.append(color_blue)
+            
+            for n in path:
+                p = Point()
+                p.x = n[0]
+                p.y = n[1]
+                p.z = 0.0
+                m.points.append(p)
+                m.colors.append(color_blue)
+            
+            self.marker_pub2.publish(m)
     def distance_to_target(self , target):
         # print("distance_to_target:", self.current_pose[0] , target[0] , self.current_pose[1] , target[1])
         return   math.sqrt((self.current_pose[0] - target[0])**2 + (self.current_pose[1] - target[1])**2)
@@ -428,7 +504,7 @@ if __name__ == '__main__':
 
 
     node = OnlinePlanner('/projected_map', '/odom', '/cmd_vel', np.array([-10.0, 10.0, -10.0, 10.0]), 
-                         0.2 , is_unknown_valid , is_rrt_star )
+                         0.225 , is_unknown_valid , is_rrt_star )
     
     # Run forever
     rospy.spin()
