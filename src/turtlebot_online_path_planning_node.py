@@ -14,7 +14,7 @@ from nav_msgs.msg import OccupancyGrid
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Bool
 from std_msgs.msg import Float64MultiArray
-from utils_lib.online_planning import StateValidityChecker, move_to_point , compute_path , wrap_angle ,move_to_point_smooth
+from utils_lib.online_planning import StateValidityChecker, move_to_point , compute_path , wrap_angle ,move_to_point_smooth, pure_pursuit_control, Adabtive_pure_pursuit_control
 class OnlinePlanner:
     # OnlinePlanner Constructor
     def __init__(self, gridmap_topic, odom_topic, cmd_vel_topic, bounds, distance_threshold ,is_unknown_valid ,is_rrt_star):
@@ -49,7 +49,7 @@ class OnlinePlanner:
         self.wheel_base_distance = 0.235  # meters  
         self.v = 0
         self.w = 0
-        # PUBLISHERS
+        # PUBLISHERS    
         # Publisher for sending velocity commands to the robot
         # self.cmd_pub = None # TODO: publisher to cmd_vel_topic
         # self.cmd_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=1)
@@ -183,7 +183,7 @@ class OnlinePlanner:
                 total_path = [self.current_pose[0:2]] + self.path
 
                 # if path is not valid and is uknown_valid is false, replan a new path to the goal
-                if(not self.svc.check_path(total_path)):
+                if(not self.svc.check_path_smooth(total_path)):
                    
                    rospy.loginfo("Replan agian current  path is in valid ")
 
@@ -259,29 +259,11 @@ class OnlinePlanner:
         self.v = 0
         self.w = 0
         #calculate nearst distance
-        
-            
-        p_skip = 7
-        if len(self.path) > 0:
-            p_near = self.path[0]
-            min_distance = self.distance_to_target(self.path[0])
-            for point in self.path[:p_skip+1]:
-                distance = self.distance_to_target(point)
-                if distance < min_distance:
-                    p_near = point
-                    min_distance = distance
-            if len(self.path) < p_skip+1:
-                distance_to_goal = self.distance_to_target(self.path[-1])
-                count = len(self.path)+1
-            else:
-                distance_to_goal = self.distance_to_target(self.path[p_skip])
-                count = p_skip+1
-            
+
+        if len(self.path)> 0:
+            distance_to_goal = self.distance_to_target(self.path[0])
             if (distance_to_goal< self.tolorance):
-            # TODO: If current waypoint is reached with some tolerance move to the next waypoint. 
-                # print("one way point reached " , self.path[0] , distance_to_goal)
-                del self.path[:count]
-                
+                del self.path[0]
                 if(len(self.path) == 0 ):
                     rospy.loginfo("Goal Point Reached !")
                     x = self.current_pose[0]
@@ -303,20 +285,112 @@ class OnlinePlanner:
                     self.retry = 0
                     self.v = 0
                     self.w = 0
+            else:
+                self.v, self.w = Adabtive_pure_pursuit_control(self.current_pose, self.path[0])
+
+            
+        # p_skip = 5
+        # if len(self.path) > 0:
+    
+        #     if len(self.path) < p_skip+1:
+        #         distance_to_goal = self.distance_to_target(self.path[-1])
+        #         count = len(self.path)+1
+        #     else:
+        #         distance_to_goal = self.distance_to_target(self.path[p_skip])
+        #         count = p_skip+1
+            
+        #     if (distance_to_goal< self.tolorance):
+
+        #         del self.path[:count]
+                
+        #         if(len(self.path) == 0 ):
+        #             rospy.loginfo("Goal Point Reached !")
+        #             x = self.current_pose[0]
+        #             y = self.current_pose[1]
+        #             angle = self.current_pose[2]
+        #             distance = 0.4
+        #             # Calculate the next goal position
+        #             goal_x = x + distance * math.cos(angle)
+        #             goal_y = y + distance * math.sin(angle)
+        #             if not self.svc.is_valid((goal_x, goal_y)):
+        #                 self.move_back()
+        #                 print("Goal Point Reached ! move back a little bit")
+
+        #             # self.rotate_to_explore()
+        #             self.goal = None
+        #             msg = Bool()    
+        #             msg = True
+        #             self.goal_reach.publish(msg)
+        #             self.retry = 0
+        #             self.v = 0
+        #             self.w = 0
                    
                 
-            else: # TODO: Compute velocities using controller function in utils_lib
+        #     else: # TODO: Compute velocities using controller function in utils_lib
               
-                if len(self.path) < count:
-                    self.v, self.w = move_to_point_smooth(self.current_pose, self.path[-1], p_near)
+        #         if len(self.path) < p_skip+1:
+        #             self.v, self.w = pure_pursuit_control(self.current_pose, self.path[-1])
 
-                # v , w = move_to_point(self.current_pose, self.path[0], self.Kv , self.Kw )
-                else:
-                    self.v, self.w = move_to_point_smooth(self.current_pose, self.path[p_skip], p_near)
-                # x = [self.current_pose[0] , self.current_pose[1] , self.current_pose[2] , self.v , self.w]
-                # contriol , traj  = move_to_point_dw(x, self.path[0])
-                # self.v = contriol[0]
-                # self.w = contriol[1]
+        #         # v , w = move_to_point(self.current_pose, self.path[0], self.Kv , self.Kw )
+        #         else:
+        #             self.v, self.w = pure_pursuit_control(self.current_pose, self.path[p_skip])
+            
+        # p_skip = 7
+        # if len(self.path) > 0:
+        #     p_near = self.path[0]
+        #     min_distance = self.distance_to_target(self.path[0])
+        #     for point in self.path[:p_skip+1]:
+        #         distance = self.distance_to_target(point)
+        #         if distance < min_distance:
+        #             p_near = point
+        #             min_distance = distance
+        #     if len(self.path) < p_skip+1:
+        #         distance_to_goal = self.distance_to_target(self.path[-1])
+        #         count = len(self.path)+1
+        #     else:
+        #         distance_to_goal = self.distance_to_target(self.path[p_skip])
+        #         count = p_skip+1
+            
+        #     if (distance_to_goal< self.tolorance):
+        #     # TODO: If current waypoint is reached with some tolerance move to the next waypoint. 
+        #         # print("one way point reached " , self.path[0] , distance_to_goal)
+        #         del self.path[:count]
+                
+        #         if(len(self.path) == 0 ):
+        #             rospy.loginfo("Goal Point Reached !")
+        #             x = self.current_pose[0]
+        #             y = self.current_pose[1]
+        #             angle = self.current_pose[2]
+        #             distance = 0.4
+        #             # Calculate the next goal position
+        #             goal_x = x + distance * math.cos(angle)
+        #             goal_y = y + distance * math.sin(angle)
+        #             if not self.svc.is_valid((goal_x, goal_y)):
+        #                 self.move_back()
+        #                 print("Goal Point Reached ! move back a little bit")
+
+        #             # self.rotate_to_explore()
+        #             self.goal = None
+        #             msg = Bool()    
+        #             msg = True
+        #             self.goal_reach.publish(msg)
+        #             self.retry = 0
+        #             self.v = 0
+        #             self.w = 0
+                   
+                
+        #     else: # TODO: Compute velocities using controller function in utils_lib
+              
+        #         if len(self.path) < count:
+        #             self.v, self.w = move_to_point_smooth(self.current_pose, self.path[-1], p_near)
+
+        #         # v , w = move_to_point(self.current_pose, self.path[0], self.Kv , self.Kw )
+        #         else:
+        #             self.v, self.w = move_to_point_smooth(self.current_pose, self.path[p_skip], p_near)
+        #         # x = [self.current_pose[0] , self.current_pose[1] , self.current_pose[2] , self.v , self.w]
+        #         # contriol , traj  = move_to_point_dw(x, self.path[0])
+        #         # self.v = contriol[0]
+        #         # self.w = contriol[1]
 
         # Publish velocity commands 
         self.__send_commnd__(self.v, self.w)

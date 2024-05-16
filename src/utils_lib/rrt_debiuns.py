@@ -291,7 +291,7 @@ class RRT:
         #calculate the distance between to_node and from_node
         check_distance = to_node.get_distance(from_node)
         # check_angel = from_node.yaw - to_yaw
-        if check_distance < 0.4:
+        if check_distance < 0.35:
             path_db = dubins.shortest_path((from_node.x ,from_node.y , to_yaw), (to_node.x ,to_node.y , to_yaw), self.debiun_radius)
             # print("Stright ##########################################################################")
         else: 

@@ -264,3 +264,92 @@ def move_to_point_smooth(current, goal, p_near, Kp=10, Ki=10, Kd=10, dt=0.05):
         v = 0
     
     return v, w
+
+def pure_pursuit_control(current, goal):
+    # Parameters
+    robot_x, robot_y, robot_yaw = current
+    if len(goal) == 3:
+        goal_x, goal_y, _ = goal
+    else:
+        goal_x, goal_y = goal
+
+    lookahead_distance = 0.1  # Distance to look ahead on the path
+    L = 0.235  # Wheelbase of the robot (distance between front and rear wheels)
+    dx = goal_x - robot_x
+    dy = goal_y - robot_y
+    angle = wrap_angle(math.atan2(dy, dx) - current[2])
+    distance_to_goal = math.sqrt(dx**2 + dy**2)
+    if distance_to_goal < lookahead_distance: 
+        lookahead_x, lookahead_y = goal_x, goal_y
+    else: 
+        scale = lookahead_distance/distance_to_goal
+        lookahead_x = robot_x + scale * dx
+        lookahead_y = robot_y + scale * dy
+
+    angle_to_lookahead = math.atan2(lookahead_y - robot_y, lookahead_x - robot_x)
+
+    alpha = wrap_angle(angle_to_lookahead - robot_yaw)
+    
+    delta = math.atan2(2* L * math.sin(alpha), lookahead_distance)
+
+    v = 0.03
+
+    w = (v / L) * math.tan(delta)
+
+    if abs(angle) > 0.8 and distance_to_goal < 0.35:
+        v = 0
+    return v, 
+
+def Adabtive_pure_pursuit_control(current, goal, max_lookahead_distance=0.5, min_lookahead_distance=0.1, base_velocity=0.03):
+    # Parameters
+    robot_x, robot_y, robot_yaw = current
+    if len(goal) == 3:
+        goal_x, goal_y, _ = goal
+    else:
+        goal_x, goal_y = goal
+
+    # Calculate distance to goal
+    dx = goal_x - robot_x
+    dy = goal_y - robot_y
+    distance_to_goal = math.sqrt(dx**2 + dy**2)
+
+    # Adaptive lookahead distance
+    lookahead_distance = max(min_lookahead_distance, min(max_lookahead_distance, distance_to_goal))
+
+    # Calculate the lookahead point
+    if distance_to_goal < lookahead_distance:
+        lookahead_x, lookahead_y = goal_x, goal_y
+    else:
+        scale = lookahead_distance / distance_to_goal
+        lookahead_x = robot_x + scale * dx
+        lookahead_y = robot_y + scale * dy
+
+    # Calculate the steering angle
+    angle_to_lookahead = math.atan2(lookahead_y - robot_y, lookahead_x - robot_x)
+    alpha = wrap_angle(angle_to_lookahead - robot_yaw)
+    
+    L = 0.235  # Wheelbase of the robot
+    delta = math.atan2(2 * L * math.sin(alpha), lookahead_distance)
+
+    # Speed control
+    k = 0.01  # Gain for proportional control (tune this value)
+    v = base_velocity + k * (distance_to_goal - lookahead_distance)
+    v = max(0.02, min(0.1, v))  # Limit the velocity to a range (tune the max value)
+    
+    max_angle = 0.15 #threshold angle for accelration
+    max_v = 0.2
+    min_v = 0.03
+    if abs(alpha) <= max_angle:
+        v = max(min_v, min(max_v, base_velocity + (max_v - base_velocity) * (max_angle - abs(alpha)) / max_angle))
+    else:
+        v = max(0.02, min(0.1, v))
+    # Angular velocity
+    w = (v / L) * math.tan(delta)
+
+    # Slow down if the angle is too large and close to the goal
+    if abs(alpha) > 0.8 and distance_to_goal < 0.35:
+        v = 0
+    
+    print("velocity", v)
+
+    return v, w
